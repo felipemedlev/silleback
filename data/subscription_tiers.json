@@ -1,0 +1,32 @@
+[
+  {
+    "model": "api.subscriptiontier",
+    "fields": {
+      "name": "Plan Esencia",
+      "price": "19990.00",
+      "decant_size": 3,
+      "perfume_criteria": {},
+      "description": "Ideal para quienes quieren descubrir perfumes sin gastar mucho"
+    }
+  },
+  {
+    "model": "api.subscriptiontier",
+    "fields": {
+      "name": "Plan Intenso",
+      "price": "29990.00",
+      "decant_size": 5,
+      "perfume_criteria": {},
+      "description": "Para quienes buscan variedad, personalización y buenas sorpresas"
+    }
+  },
+  {
+    "model": "api.subscriptiontier",
+    "fields": {
+      "name": "Plan Signature",
+      "price": "39990.00",
+      "decant_size": 10,
+      "perfume_criteria": {},
+      "description": "Perfecto para el amante de perfumes que quiere lo mejor cada mes"
+    }
+  }
+]

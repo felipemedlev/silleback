@@ -1,9 +1,10 @@
 from djoser.serializers import UserCreateSerializer as BaseUserCreateSerializer
 from djoser.serializers import UserSerializer as BaseUserSerializer
 from rest_framework import serializers
-from .models import ( # Add Cart, CartItem, PredefinedBox
+from .models import ( # Add Cart, CartItem, PredefinedBox, SubscriptionTier, UserSubscription, Order, OrderItem, Rating, Favorite
     Brand, Occasion, Accord, Perfume, SurveyResponse, UserPerfumeMatch,
-    Cart, CartItem, PredefinedBox
+    Cart, CartItem, PredefinedBox, SubscriptionTier, UserSubscription,
+    Order, OrderItem, Rating, Favorite
 )
 from django.contrib.auth import get_user_model
 
@@ -203,12 +204,130 @@ class PredefinedBoxSerializer(serializers.ModelSerializer):
 # --- End Box Serializers ---
 
 
-# Add other serializers here later (OrderSerializer, etc.)
+# --- Subscription Serializers ---
+
+class SubscriptionTierSerializer(serializers.ModelSerializer):
+    """ Serializer for displaying subscription tiers. """
+    class Meta:
+        model = SubscriptionTier
+        fields = ('id', 'name', 'price', 'decant_size', 'perfume_criteria', 'description')
+        # Typically read-only for listing tiers
+        read_only_fields = fields
+
+class UserSubscriptionSerializer(serializers.ModelSerializer):
+    """ Serializer for displaying the user's current subscription status. """
+    # Use nested serializer for tier details
+    tier = SubscriptionTierSerializer(read_only=True)
+    # User is implicitly the request user, not shown directly unless needed
+    # user = UserSerializer(read_only=True)
+
+    class Meta:
+        model = UserSubscription
+        fields = ('id', 'tier', 'start_date', 'is_active')
+        read_only_fields = ('id', 'tier', 'start_date', 'is_active') # Status is read-only
+
+class SubscribeSerializer(serializers.Serializer):
+    """ Serializer for the subscribe action. """
+    tier_id = serializers.PrimaryKeyRelatedField(queryset=SubscriptionTier.objects.all(), required=True)
+    # Add fields for payment details later (e.g., payment_method_id)
+
+# --- End Subscription Serializers ---
 
 
-# --- End Cart Serializers ---
+# --- Order Serializers ---
+
+class OrderItemSerializer(serializers.ModelSerializer):
+    """ Serializer for displaying items within an order. """
+    # Use the summary serializer for perfume details if available
+    perfume = PerfumeSummarySerializer(read_only=True)
+
+    class Meta:
+        model = OrderItem
+        fields = (
+            'id', 'perfume', 'product_type', 'quantity', 'decant_size',
+            'price_at_purchase', 'box_configuration', 'item_name', 'item_description'
+        )
+        read_only_fields = fields # Order items are read-only representations
+
+class OrderSerializer(serializers.ModelSerializer):
+    """ Serializer for displaying order details. """
+    # Nested items using OrderItemSerializer
+    items = OrderItemSerializer(many=True, read_only=True)
+    # Optionally display user email or use a nested UserSerializer
+    user_email = serializers.EmailField(source='user.email', read_only=True, allow_null=True) # Allow null if user is deleted
+
+    class Meta:
+        model = Order
+        fields = (
+            'id', 'user_email', 'order_date', 'total_price', 'status',
+            'shipping_address', 'items', 'updated_at'
+            # Add payment_details later if needed
+        )
+        read_only_fields = fields # Orders are typically read-only once created via API
+
+class OrderCreateSerializer(serializers.Serializer):
+    """ Serializer for creating an order from the cart. """
+    # Expects shipping address, other details derived from cart/user
+    shipping_address = serializers.CharField(required=True, allow_blank=False)
+    # Add payment details field later (e.g., payment_method_id)
+
+# --- End Order Serializers ---
 
 
-# Add other serializers here later (OrderSerializer, etc.)
+# --- Rating & Favorite Serializers ---
 
-# Add other serializers here later (PerfumeSerializer, CartSerializer, etc.)
+class RatingSerializer(serializers.ModelSerializer):
+    """ Serializer for creating/updating/viewing a perfume rating. """
+    # User and Perfume are set implicitly or via URL, make read-only here
+    user = serializers.PrimaryKeyRelatedField(read_only=True)
+    perfume = serializers.PrimaryKeyRelatedField(read_only=True)
+    # Allow rating field to be written
+    rating = serializers.IntegerField(min_value=1, max_value=5, required=True)
+
+    class Meta:
+        model = Rating
+        fields = ('id', 'user', 'perfume', 'rating', 'timestamp')
+        read_only_fields = ('id', 'user', 'perfume', 'timestamp') # User/Perfume set in view
+
+    def validate_rating(self, value):
+        """ Ensure rating is within the allowed range (1-5). """
+        if not (1 <= value <= 5):
+            raise serializers.ValidationError("Rating must be between 1 and 5.")
+        return value
+
+class FavoriteSerializer(serializers.ModelSerializer):
+    """ Serializer for creating a favorite relationship. """
+    # User is set implicitly, Perfume via request data
+    user = serializers.PrimaryKeyRelatedField(read_only=True)
+    perfume_id = serializers.PrimaryKeyRelatedField(
+        queryset=Perfume.objects.all(), source='perfume', write_only=True
+    )
+
+    class Meta:
+        model = Favorite
+        fields = ('id', 'user', 'perfume_id', 'added_at')
+        read_only_fields = ('id', 'user', 'added_at')
+
+    def create(self, validated_data):
+        # Ensure user is set correctly during creation
+        validated_data['user'] = self.context['request'].user
+        # Prevent duplicates using get_or_create
+        favorite, created = Favorite.objects.get_or_create(
+            user=validated_data['user'],
+            perfume=validated_data['perfume'],
+            defaults={} # No extra defaults needed here
+        )
+        return favorite
+
+
+class FavoriteListSerializer(serializers.ModelSerializer):
+    """ Serializer specifically for listing favorites, showing perfume details. """
+    # Use nested serializer for perfume details
+    perfume = PerfumeSummarySerializer(read_only=True)
+
+    class Meta:
+        model = Favorite
+        fields = ('id', 'perfume', 'added_at') # Show perfume details and when it was added
+        read_only_fields = fields
+
+# --- End Rating & Favorite Serializers ---

@@ -2,6 +2,7 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError # Moved import to top
+from django.core.validators import MinValueValidator, MaxValueValidator
 
 
 # Create your models here.
@@ -209,16 +210,157 @@ class PredefinedBox(models.Model):
     """
     Represents a curated box with a fixed set of perfumes.
     """
-    name = models.CharField(max_length=200, unique=True)
+    title = models.CharField(max_length=200, unique=True)
     description = models.TextField(blank=True, null=True)
+    icon = models.CharField(max_length=50, blank=True, null=True, help_text="Feather icon name")
+    gender = models.CharField(
+        max_length=10,
+        choices=[('masculino', 'Masculino'), ('femenino', 'Femenino')],
+        blank=True,
+        null=True,
+        help_text="Target gender for the box"
+    )
     perfumes = models.ManyToManyField(Perfume, related_name='predefined_boxes', blank=True)
     # Consider adding fields like price, image_url, etc. later if needed
 
     def __str__(self):
-        return self.name
+        return self.title
 
-# Add other models here later (Order, Subscription, Rating, Favorite, etc.)
 
-# Add other models here later (Order, Subscription, Rating, Favorite, etc.)
+# --- Subscription Models ---
 
-# Add other models here later (Perfume, Brand, Cart, Order, etc.)
+class SubscriptionTier(models.Model):
+    """
+    Represents different subscription levels offered.
+    """
+    name = models.CharField(max_length=100, unique=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2, help_text="Monthly price")
+    decant_size = models.IntegerField(help_text="Size of decant in ML included in this tier")
+    # Define criteria for perfume selection (e.g., JSONField for complex rules, or simpler fields)
+    # Example: Allow perfumes up to a certain price point or from specific brands/categories
+    perfume_criteria = models.JSONField(default=dict, blank=True, help_text="JSON defining criteria for perfume selection in this tier")
+    description = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.name} (${self.price}/month)"
+
+class UserSubscription(models.Model):
+    """
+    Links a user to a specific subscription tier they are subscribed to.
+    """
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='subscription') # Assuming one active subscription per user
+    tier = models.ForeignKey(SubscriptionTier, on_delete=models.SET_NULL, null=True, blank=True, related_name='subscribers') # SET_NULL keeps user record if tier deleted
+    start_date = models.DateTimeField(auto_now_add=True)
+    # Add end_date or renewal_date if needed for billing cycles
+    # end_date = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    # Store payment details reference (e.g., Stripe customer/subscription ID) - Add later with payment integration
+    # payment_provider_subscription_id = models.CharField(max_length=100, blank=True, null=True)
+
+    def __str__(self):
+        tier_name = self.tier.name if self.tier else "No Tier"
+        status = "Active" if self.is_active else "Inactive"
+        return f"{self.user.email} - {tier_name} ({status})"
+
+# --- End Subscription Models ---
+
+
+# --- Order Models ---
+
+class Order(models.Model):
+    """
+    Represents a customer order.
+    """
+    ORDER_STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('processing', 'Processing'),
+        ('shipped', 'Shipped'),
+        ('delivered', 'Delivered'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='orders') # Keep order if user deleted? Or CASCADE?
+    order_date = models.DateTimeField(auto_now_add=True)
+    total_price = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(max_length=20, choices=ORDER_STATUS_CHOICES, default='pending')
+    # Store shipping address details directly or link to a saved address model?
+    # For simplicity now, store directly. Consider Address model later.
+    shipping_address = models.TextField(blank=True, null=True)
+    # Payment details - store reference to payment transaction ID later
+    # payment_details = models.CharField(max_length=100, blank=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-order_date'] # Show newest orders first
+
+    def __str__(self):
+        return f"Order {self.id} by {self.user.email if self.user else 'Guest'} on {self.order_date.strftime('%Y-%m-%d')}"
+
+class OrderItem(models.Model):
+    """
+    Represents an item within an order, mirroring CartItem structure at the time of purchase.
+    """
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
+    # Link to the specific perfume purchased
+    perfume = models.ForeignKey(Perfume, on_delete=models.SET_NULL, null=True, blank=True, related_name='order_items') # Keep item record if perfume deleted
+    # Store details as they were at the time of purchase
+    product_type = models.CharField(max_length=10, default='perfume') # 'perfume' or 'box'
+    quantity = models.PositiveIntegerField(default=1)
+    decant_size = models.IntegerField(null=True, blank=True, help_text="Size of decant in ML, if applicable")
+    price_at_purchase = models.DecimalField(max_digits=10, decimal_places=2)
+    # If it was a box, store its configuration/details
+    box_configuration = models.JSONField(null=True, blank=True, help_text="JSON configuration for custom boxes if applicable")
+    # Store the name/description as it was, in case the product changes later
+    item_name = models.CharField(max_length=255, blank=True, null=True) # e.g., "Chanel No. 5" or "Discovery Box"
+    item_description = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        item_desc = self.item_name if self.item_name else f"Item {self.id}"
+        return f"{self.quantity} x {item_desc} in Order {self.order.id}"
+
+# --- End Order Models ---
+
+
+# --- Rating & Favorite Models ---
+
+class Rating(models.Model):
+    """
+    Represents a user's rating for a specific perfume.
+    """
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='ratings')
+    perfume = models.ForeignKey(Perfume, on_delete=models.CASCADE, related_name='ratings')
+    rating = models.IntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(5)], # Assuming a 1-5 star rating
+        help_text="User rating (1-5)"
+    )
+    timestamp = models.DateTimeField(auto_now=True) # Track when the rating was given/updated (use auto_now for updates)
+
+    class Meta:
+        unique_together = ('user', 'perfume') # User can only rate a perfume once
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['user', 'perfume']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.email} rated {self.perfume.name}: {self.rating} stars"
+
+class Favorite(models.Model):
+    """
+    Represents a perfume marked as a favorite by a user.
+    """
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='favorites')
+    perfume = models.ForeignKey(Perfume, on_delete=models.CASCADE, related_name='favorited_by')
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'perfume') # User can only favorite a perfume once
+        ordering = ['-added_at']
+        indexes = [
+            models.Index(fields=['user', 'perfume']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.email} favorited {self.perfume.name}"
+
+# --- End Rating & Favorite Models ---

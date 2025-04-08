@@ -1,17 +1,22 @@
-from rest_framework import viewsets, permissions, generics, status # Add generics, status
+from rest_framework import viewsets, permissions, generics, status, mixins # Add generics, status, mixins
 from rest_framework.response import Response # Add Response
+from rest_framework import serializers
 from rest_framework.decorators import action # Import action decorator
 from django.shortcuts import get_object_or_404 # Import get_object_or_404
 from django.db import transaction # Import transaction
-from .models import ( # Add Cart, CartItem
-    Brand, Occasion, Accord, Perfume, User, SurveyResponse, UserPerfumeMatch, # Removed Cart, CartItem from here as they are used in serializers
-    Cart, CartItem
+from .models import ( # Add Cart, CartItem, PredefinedBox, SubscriptionTier, UserSubscription, Order, OrderItem, Rating, Favorite
+    Brand, Occasion, Accord, Perfume, User, SurveyResponse, UserPerfumeMatch,
+    Cart, CartItem, PredefinedBox, SubscriptionTier, UserSubscription,
+    Order, OrderItem, Rating, Favorite
 )
-from .serializers import ( # Add CartSerializer, CartItemSerializer, CartItemAddSerializer
+from .serializers import ( # Add CartSerializer, CartItemSerializer, CartItemAddSerializer, PredefinedBoxSerializer, SubscriptionTierSerializer, UserSubscriptionSerializer, SubscribeSerializer, OrderSerializer, OrderItemSerializer, OrderCreateSerializer, RatingSerializer, FavoriteSerializer, FavoriteListSerializer
     BrandSerializer, OccasionSerializer, AccordSerializer, PerfumeSerializer,
-    UserSerializer, SurveyResponseSerializer, CartSerializer, CartItemSerializer, CartItemAddSerializer
+    UserSerializer, SurveyResponseSerializer, CartSerializer, CartItemSerializer, CartItemAddSerializer,
+    PredefinedBoxSerializer, SubscriptionTierSerializer, UserSubscriptionSerializer, SubscribeSerializer,
+    OrderSerializer, OrderItemSerializer, OrderCreateSerializer,
+    RatingSerializer, FavoriteSerializer, FavoriteListSerializer
 )
-from decimal import Decimal # For price calculation
+from decimal import Decimal, InvalidOperation # Import InvalidOperation
 
 # Create your views here.
 
@@ -185,3 +190,318 @@ class CartViewSet(viewsets.ViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 # --- End Cart ViewSet ---
+
+
+# --- Box ViewSets ---
+
+class PredefinedBoxViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API endpoint that allows predefined boxes to be viewed.
+    """
+    queryset = PredefinedBox.objects.prefetch_related('perfumes').all() # Prefetch perfumes for efficiency
+    serializer_class = PredefinedBoxSerializer
+    permission_classes = [permissions.AllowAny] # Allow anyone to view predefined boxes
+
+# --- End Box ViewSets ---
+
+
+# --- Subscription ViewSet ---
+
+class SubscriptionViewSet(viewsets.ViewSet):
+    """
+    ViewSet for managing user subscriptions.
+    """
+    permission_classes = [permissions.IsAuthenticated] # Default to authenticated
+
+    @action(detail=False, methods=['get'], url_path='tiers', permission_classes=[permissions.AllowAny])
+    def list_tiers(self, request):
+        """
+        List available subscription tiers.
+        Corresponds to GET /api/subscriptions/tiers/
+        """
+        tiers = SubscriptionTier.objects.all()
+        serializer = SubscriptionTierSerializer(tiers, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='status')
+    def get_status(self, request):
+        """
+        Get the current user's subscription status.
+        Corresponds to GET /api/subscriptions/status/
+        """
+        try:
+            subscription = UserSubscription.objects.get(user=request.user)
+            serializer = UserSubscriptionSerializer(subscription)
+            return Response(serializer.data)
+        except UserSubscription.DoesNotExist:
+            return Response({"detail": "No active subscription found."}, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=False, methods=['post'], url_path='subscribe')
+    def subscribe(self, request):
+        """
+        Subscribe the current user to a selected tier.
+        Corresponds to POST /api/subscriptions/subscribe/
+        Expects: {"tier_id": <id>}
+        (Payment integration to be added later)
+        """
+        input_serializer = SubscribeSerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
+        tier = input_serializer.validated_data['tier_id']
+
+        # Use update_or_create to handle new subscriptions or changing tiers/reactivating
+        subscription, created = UserSubscription.objects.update_or_create(
+            user=request.user,
+            defaults={'tier': tier, 'is_active': True} # Ensure subscription is active
+        )
+
+        # Placeholder: Add payment processing logic here in a real application
+
+        response_serializer = UserSubscriptionSerializer(subscription)
+        status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+        return Response(response_serializer.data, status=status_code)
+
+    @action(detail=False, methods=['post'], url_path='unsubscribe')
+    def unsubscribe(self, request):
+        """
+        Unsubscribe (deactivate) the current user's subscription.
+        Corresponds to POST /api/subscriptions/unsubscribe/
+        """
+        try:
+            subscription = UserSubscription.objects.get(user=request.user, is_active=True)
+            subscription.is_active = False
+            # Optionally set tier to None or keep it for history
+            # subscription.tier = None
+            subscription.save()
+
+            # Placeholder: Add logic to cancel payment provider subscription here
+
+            serializer = UserSubscriptionSerializer(subscription)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except UserSubscription.DoesNotExist:
+            return Response({"detail": "No active subscription found to unsubscribe."}, status=status.HTTP_404_NOT_FOUND)
+
+# --- End Subscription ViewSet ---
+
+
+# --- Order ViewSet ---
+
+class OrderViewSet(viewsets.GenericViewSet, # Mixin for standard actions
+                   mixins.ListModelMixin,    # Handles GET /api/orders/
+                   mixins.RetrieveModelMixin, # Handles GET /api/orders/{id}/
+                   mixins.CreateModelMixin):  # Handles POST /api/orders/
+    """
+    ViewSet for creating and viewing user orders.
+    """
+    serializer_class = OrderSerializer # Default serializer for list/retrieve
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        """ Ensure users only see their own orders. """
+        # Eager load related items and perfumes to optimize DB queries for list/retrieve
+        return Order.objects.filter(user=self.request.user).prefetch_related('items', 'items__perfume')
+
+    def get_serializer_class(self):
+        """ Use OrderCreateSerializer for the create action. """
+        if self.action == 'create':
+            return OrderCreateSerializer
+        return OrderSerializer # Use default for list/retrieve
+
+    def perform_create(self, serializer):
+        """
+        Custom logic to create an order from the user's cart.
+        Handles transaction atomicity, copies cart items to order items, and clears the cart.
+        """
+        user = self.request.user
+        # shipping_address is validated by OrderCreateSerializer
+        shipping_address = serializer.validated_data['shipping_address']
+        # Payment details would be handled here later
+
+        try:
+            # Prefetch items and related perfumes for efficiency
+            cart = Cart.objects.prefetch_related('items', 'items__perfume').get(user=user)
+        except Cart.DoesNotExist:
+            # Use DRF's validation error for consistency
+            raise serializers.ValidationError("Cart not found or is empty.")
+
+        cart_items = cart.items.all()
+        if not cart_items.exists():
+            raise serializers.ValidationError("Cannot create an order from an empty cart.")
+
+        # Use a database transaction to ensure all steps succeed or fail together
+        with transaction.atomic():
+            # 1. Calculate total price from cart items
+            total_price = Decimal('0.00')
+            for item in cart_items:
+                # Use price_at_addition stored in CartItem
+                if item.price_at_addition is not None:
+                    try:
+                        # Ensure calculation uses Decimals
+                        total_price += (Decimal(item.price_at_addition) * Decimal(item.quantity))
+                    except (TypeError, InvalidOperation):
+                         # Log this error in a real application
+                         raise serializers.ValidationError(f"Invalid price or quantity found for cart item {item.id}.")
+                else:
+                    # This indicates an issue during cart addition - price should always be set.
+                    # Log this error
+                    raise serializers.ValidationError(f"Missing price for cart item {item.id}. Cannot create order.")
+
+
+            # 2. Create the Order instance
+            order = Order.objects.create(
+                user=user,
+                total_price=total_price,
+                shipping_address=shipping_address,
+                status='pending' # Initial status, update after payment success later
+                # Add payment details reference here later (e.g., payment_intent_id)
+            )
+
+            # 3. Create OrderItem instances from CartItems
+            order_items_to_create = []
+            for cart_item in cart_items:
+                # Determine item name and description based on type
+                item_name = "Box Item" # Default for boxes
+                item_description = "Predefined/Custom Box"
+                if cart_item.product_type == 'perfume' and cart_item.perfume:
+                    item_name = cart_item.perfume.name
+                    item_description = cart_item.perfume.description
+
+                order_items_to_create.append(
+                    OrderItem(
+                        order=order,
+                        perfume=cart_item.perfume, # Link to perfume if applicable
+                        product_type=cart_item.product_type,
+                        quantity=cart_item.quantity,
+                        decant_size=cart_item.decant_size,
+                        price_at_purchase=cart_item.price_at_addition, # Crucial: Use the price stored at time of cart addition
+                        box_configuration=cart_item.box_configuration, # Copy box config if it was a box item
+                        item_name=item_name, # Store name at time of purchase
+                        item_description=item_description # Store description at time of purchase
+                    )
+                )
+            # Use bulk_create for efficiency if creating many items
+            OrderItem.objects.bulk_create(order_items_to_create)
+
+            # 4. Clear the user's cart after successful order creation
+            # It's important this happens *within* the transaction
+            cart.items.all().delete()
+
+            # 5. Placeholder: Trigger payment processing here.
+            # If payment fails, the transaction rollback would undo order creation.
+            # If payment is async, update order status later via webhook/callback.
+
+            # Set the instance on the serializer for the response in CreateModelMixin
+            # This ensures the response contains the data of the *created* order.
+            serializer.instance = order
+
+
+# --- End Order ViewSet ---
+
+
+# --- Rating & Favorite Views ---
+
+class PerfumeRatingView(generics.GenericAPIView):
+    """
+    View for retrieving or creating/updating the authenticated user's rating
+    for a specific perfume.
+    Accessed via /api/perfumes/{perfume_id}/rating/
+    """
+    serializer_class = RatingSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_perfume(self):
+        """ Helper to get the perfume object from URL kwargs. """
+        perfume_id = self.kwargs.get('perfume_id')
+        return get_object_or_404(Perfume, pk=perfume_id)
+
+    def get(self, request, *args, **kwargs):
+        """ Handle GET requests to retrieve the user's rating for the perfume. """
+        perfume = self.get_perfume()
+        try:
+            rating = Rating.objects.get(user=request.user, perfume=perfume)
+            serializer = self.get_serializer(rating)
+            return Response(serializer.data)
+        except Rating.DoesNotExist:
+            # It's okay if no rating exists yet, return 404 as per REST principles
+            return Response({"detail": "No rating found for this perfume by the user."}, status=status.HTTP_404_NOT_FOUND)
+
+    def post(self, request, *args, **kwargs):
+        """ Handle POST requests to create or update the user's rating. """
+        perfume = self.get_perfume()
+        # Check if a rating already exists to pass it to the serializer for update
+        try:
+            instance = Rating.objects.get(user=request.user, perfume=perfume)
+            serializer = self.get_serializer(instance, data=request.data)
+        except Rating.DoesNotExist:
+            instance = None
+            serializer = self.get_serializer(data=request.data)
+
+        serializer.is_valid(raise_exception=True)
+
+        # Use update_or_create for atomicity and simplicity
+        rating_instance, created = Rating.objects.update_or_create(
+            user=request.user,
+            perfume=perfume,
+            defaults={'rating': serializer.validated_data['rating']}
+        )
+
+        # Placeholder: Trigger ML prediction recalculation here (future phase)
+        # Example: trigger_ml_recalculation.delay(user_id=request.user.id)
+
+        # Return the saved/updated rating instance
+        response_serializer = self.get_serializer(rating_instance)
+        status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+        return Response(response_serializer.data, status=status_code)
+
+class FavoriteViewSet(mixins.ListModelMixin,
+                      mixins.CreateModelMixin,
+                      # mixins.DestroyModelMixin, # Using custom delete action instead
+                      viewsets.GenericViewSet):
+    """
+    ViewSet for managing user favorites.
+    - GET /api/favorites/ : List user's favorites
+    - POST /api/favorites/ : Add a favorite (expects {"perfume_id": id})
+    - DELETE /api/favorites/perfume/{perfume_id}/ : Remove favorite by perfume ID (custom action)
+    - DELETE /api/favorites/{favorite_id}/ : Remove favorite by favorite ID (standard, if DestroyModelMixin used)
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        """ Ensure users only see their own favorites, prefetch related data. """
+        return Favorite.objects.filter(user=self.request.user).select_related('perfume', 'perfume__brand')
+
+    def get_serializer_class(self):
+        """ Use different serializers for list vs create. """
+        if self.action == 'list':
+            return FavoriteListSerializer # Shows perfume details
+        # Use FavoriteSerializer for create action
+        return FavoriteSerializer
+
+    def perform_create(self, serializer):
+        """ Set the user automatically when creating a favorite. """
+        # Pass request context to serializer for user assignment and get_or_create logic
+        serializer.save(user=self.request.user) # Serializer's create method handles get_or_create
+
+    # If using DestroyModelMixin, it handles DELETE /api/favorites/{pk}/
+    # def destroy(self, request, *args, **kwargs):
+    #     instance = self.get_object()
+    #     self.perform_destroy(instance)
+    #     return Response(status=status.HTTP_204_NO_CONTENT)
+    #
+    # def perform_destroy(self, instance):
+    #     instance.delete()
+
+    @action(detail=False, methods=['delete'], url_path='perfume/(?P<perfume_pk>[^/.]+)')
+    def remove_by_perfume(self, request, perfume_pk=None):
+        """
+        Custom action to remove a favorite based on the perfume ID.
+        Corresponds to DELETE /api/favorites/perfume/{perfume_id}/
+        """
+        user = request.user
+        perfume = get_object_or_404(Perfume, pk=perfume_pk)
+        # Find the specific favorite entry for this user and perfume
+        favorite = get_object_or_404(Favorite, user=user, perfume=perfume)
+        favorite.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# --- End Rating & Favorite Views ---

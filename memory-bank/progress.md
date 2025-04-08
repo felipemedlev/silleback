@@ -19,6 +19,10 @@ This file tracks the project's progress using a task list format.
 * [2025-04-07 23:35:20] - Started Phase 5: Added PredefinedBox model, migrations, serializer.
 * [2025-04-07 23:35:20] - Fixed circular import issues in serializers and models.
 
+* [2025-04-08 15:46:04] - Django admin interface configured for all models. Backend data population and admin setup complete.
+* [2025-04-08 15:36:42] - Imported subscription tiers from CSV/JSON fixture. Initial data population complete.
+* [2025-04-08 13:34:23] - Successfully populated perfume, brand, occasion, and accord data using `populate_perfumes.py` with `data/ccassions_perfumes_db.csv`.
+* [2025-04-08 1:16:19] - Backend implementation phases 1-8 complete.
 *
 
 ## Next Steps
@@ -27,4 +31,8 @@ This file tracks the project's progress using a task list format.
 * 2025-04-01 21:49:25 - Initialized Memory Bank with all required documentation files
 
 * [2025-04-01 22:36:19] - Completed Phase 1 (Authentication & Core User Setup): Installed dependencies, configured settings, defined User model/serializers, configured URLs, resolved migration issues, and performed basic API tests.
+* [2025-04-08 1:16:19] - Completed Phase 5 (Box Logic API): Implemented read-only ViewSet and URL routing for PredefinedBox.
 *
+* [2025-04-08 1:16:19] - Completed Phase 6 (Subscription API): Defined models, serializers, ViewSet (list_tiers, get_status, subscribe, unsubscribe), and URL routing.
+* [2025-04-08 1:16:19] - Completed Phase 7 (Orders & Checkout API): Defined models, serializers, ViewSet (create, list, retrieve), and URL routing.
+* [2025-04-08 1:16:19] - Completed Phase 8 (Ratings & Favorites API): Defined models, serializers, Views (Rating, Favorite), and URL routing.

@@ -1,0 +1,482 @@
+[
+  {
+    "title": "Noches Urbanas",
+    "description": "Desata tu encanto con aromas diseñados para noches inolvidables en la ciudad.",
+    "icon": "moon",
+    "gender": "male",
+    "perfumes": [
+      8825,
+      60284,
+      829,
+      97995,
+      1197,
+      73023,
+      83132,
+      93266
+    ]
+  },
+  {
+    "title": "Selección del Caballero",
+    "description": "Una mezcla refinada para el caballero moderno que valora la elegancia y el carácter.",
+    "icon": "user",
+    "gender": "male",
+    "perfumes": [
+      735,
+      70090,
+      815,
+      73664,
+      5521,
+      26358,
+      2318,
+      70839
+    ]
+  },
+  {
+    "title": "Explorador Audaz",
+    "description": "Para el alma aventurera que vive para descubrir, liderar y destacar.",
+    "icon": "compass",
+    "gender": "male",
+    "perfumes": [
+      68282,
+      933,
+      54204,
+      92423,
+      16938,
+      65718,
+      2069,
+      1198
+    ]
+  },
+  {
+    "title": "Poder y Prestigio",
+    "description": "Impón respeto con este arsenal de fragancias poderosas.",
+    "icon": "shield",
+    "gender": "male",
+    "perfumes": [
+      5521,
+      83132,
+      8825,
+      2480,
+      73225,
+      59532,
+      90713,
+      31861
+    ]
+  },
+  {
+    "title": "Carisma Nocturno",
+    "description": "Cautiva con perfumes sensuales, ideales para la noche.",
+    "icon": "activity",
+    "gender": "male",
+    "perfumes": [
+      34696,
+      83666,
+      13857,
+      65414,
+      70465,
+      73225,
+      410,
+      16938
+    ]
+  },
+  {
+    "title": "Impacto Fresco",
+    "description": "Fragancias frescas y energéticas para el hombre seguro de sí mismo.",
+    "icon": "wind",
+    "gender": "male",
+    "perfumes": [
+      16657,
+      15336,
+      90069,
+      52802,
+      2056,
+      815,
+      383,
+      89050
+    ]
+  },
+  {
+    "title": "El Ejecutivo",
+    "description": "Diseñado para líderes que no se conforman con menos.",
+    "icon": "briefcase",
+    "gender": "male",
+    "perfumes": [
+      788,
+      644,
+      43304,
+      1088,
+      46797,
+      77860,
+      11037,
+      46038
+    ]
+  },
+  {
+    "title": "Almizcle Moderno",
+    "description": "Masculinidad moderna en su máxima expresión: profunda y atrevida.",
+    "icon": "target",
+    "gender": "male",
+    "perfumes": [
+      66266,
+      644,
+      90953,
+      44035,
+      6759,
+      82467,
+      52180,
+      64501
+    ]
+  },
+  {
+    "title": "Atractivo Salvaje",
+    "description": "Terroso, audaz y magnético: así se define la sofisticación salvaje.",
+    "icon": "globe",
+    "gender": "male",
+    "perfumes": [
+      71888,
+      31445,
+      79159,
+      53215,
+      13857,
+      85092,
+      94697,
+      83132
+    ]
+  },
+  {
+    "title": "Código de Seducción",
+    "description": "Tu arma secreta de confianza y seducción, en cualquier momento.",
+    "icon": "key",
+    "gender": "male",
+    "perfumes": [
+      65414,
+      31445,
+      84094,
+      62311,
+      82467,
+      8825,
+      12520,
+      6314
+    ]
+  },
+  {
+    "title": "Espíritu Vibrante",
+    "description": "Siente la vida con una explosión de aromas vibrantes y duraderos.",
+    "icon": "zap",
+    "gender": "male",
+    "perfumes": [
+      74184,
+      3747,
+      62311,
+      65414,
+      53106,
+      81927,
+      507,
+      1068
+    ]
+  },
+  {
+    "title": "Ruta de las Especias",
+    "description": "Un viaje sensorial con una mezcla exótica y especiada.",
+    "icon": "map",
+    "gender": "male",
+    "perfumes": [
+      90069,
+      64501,
+      28935,
+      228,
+      75182,
+      1197,
+      75684,
+      11037
+    ]
+  },
+  {
+    "title": "Oud Místico",
+    "description": "Lujoso, misterioso e irresistible: la experiencia definitiva del oud.",
+    "icon": "droplet",
+    "gender": "male",
+    "perfumes": [
+      49416,
+      64501,
+      43304,
+      85092,
+      18471,
+      90713,
+      412,
+      83132
+    ]
+  },
+  {
+    "title": "Viaje Aromático",
+    "description": "Embárcate en un viaje aromático con esta colección única.",
+    "icon": "truck",
+    "gender": "male",
+    "perfumes": [
+      73023,
+      17,
+      28713,
+      40405,
+      829,
+      70465,
+      39,
+      31861
+    ]
+  },
+  {
+    "title": "Esencia Élite",
+    "description": "Una curaduría de primer nivel para quienes viven con propósito y estilo.",
+    "icon": "award",
+    "gender": "male",
+    "perfumes": [
+      38686,
+      78639,
+      78475,
+      90953,
+      81927,
+      83666,
+      70090,
+      933
+    ]
+  },
+  {
+    "title": "Brillo de Diosa",
+    "description": "Irradia elegancia y feminidad con esta colección divina de perfumes.",
+    "icon": "sun",
+    "gender": "female",
+    "perfumes": [
+      85094,
+      84309,
+      664,
+      13064,
+      75642,
+      67578,
+      62578,
+      372
+    ]
+  },
+  {
+    "title": "Dulce Seducción",
+    "description": "Aromas sensuales y encantadores para mujeres que dominan el arte de seducir.",
+    "icon": "heart",
+    "gender": "female",
+    "perfumes": [
+      78474,
+      81967,
+      60868,
+      802,
+      306,
+      82036,
+      372,
+      10190
+    ]
+  },
+  {
+    "title": "Museo en Flor",
+    "description": "Una fantasía floral para espíritus audaces, radiantes y gráciles.",
+    "icon": "flower",
+    "gender": "female",
+    "perfumes": [
+      69296,
+      62036,
+      55795,
+      664,
+      802,
+      48103,
+      83995,
+      934
+    ]
+  },
+  {
+    "title": "Noches de Terciopelo",
+    "description": "Cautivadores e intensos, perfectos para noches glamorosas.",
+    "icon": "droplet",
+    "gender": "female",
+    "perfumes": [
+      39970,
+      78474,
+      18453,
+      63485,
+      934,
+      27656,
+      818,
+      210
+    ]
+  },
+  {
+    "title": "Flor Fatal",
+    "description": "Atrévete a ser inolvidable con este ramo de encanto sensual.",
+    "icon": "feather",
+    "gender": "female",
+    "perfumes": [
+      253,
+      720,
+      536,
+      9677,
+      63485,
+      60868,
+      51630,
+      55795
+    ]
+  },
+  {
+    "title": "Encuentro Elegante",
+    "description": "Una mezcla clásica de fragancias para una elegancia diaria.",
+    "icon": "star",
+    "gender": "female",
+    "perfumes": [
+      7993,
+      632,
+      56992,
+      306,
+      707,
+      39681,
+      25324,
+      565
+    ]
+  },
+  {
+    "title": "Hora Dorada",
+    "description": "Aromas cálidos y radiantes para iluminar cualquier momento.",
+    "icon": "sunrise",
+    "gender": "female",
+    "perfumes": [
+      1701,
+      63485,
+      89599,
+      83995,
+      56992,
+      95752,
+      64015,
+      84590
+    ]
+  },
+  {
+    "title": "Sueño Parisino",
+    "description": "Transpórtate a París con dulces y románticos aromas franceses.",
+    "icon": "cloud",
+    "gender": "female",
+    "perfumes": [
+      84309,
+      257,
+      56992,
+      686,
+      141,
+      62377,
+      38998,
+      14982
+    ]
+  },
+  {
+    "title": "Deseo Exuberante",
+    "description": "Profundamente femeninos y seductores: un escape olfativo de lujo.",
+    "icon": "moon",
+    "gender": "female",
+    "perfumes": [
+      89759,
+      825,
+      69296,
+      218,
+      62377,
+      10190,
+      60942,
+      4094
+    ]
+  },
+  {
+    "title": "Aromas de Serenidad",
+    "description": "Suaves, tranquilas y elegantes: para la mujer moderna en armonía.",
+    "icon": "leaf",
+    "gender": "female",
+    "perfumes": [
+      80722,
+      39970,
+      56077,
+      44034,
+      253,
+      89903,
+      720,
+      4094
+    ]
+  },
+  {
+    "title": "Susurro Chic",
+    "description": "Delicada pero poderosa: una pizca de atracción en cada gota.",
+    "icon": "smile",
+    "gender": "female",
+    "perfumes": [
+      141,
+      219,
+      536,
+      257,
+      4094,
+      85088,
+      44034,
+      50384
+    ]
+  },
+  {
+    "title": "Floración Divina",
+    "description": "Florales y jugosos en perfecta armonía.",
+    "icon": "sparkles",
+    "gender": "female",
+    "perfumes": [
+      59326,
+      90273,
+      68596,
+      54660,
+      698,
+      89732,
+      1460,
+      78561
+    ]
+  },
+  {
+    "title": "Rosa Nocturna",
+    "description": "Una espiral romántica de pétalos y misterio para noches de luna.",
+    "icon": "bookmark",
+    "gender": "female",
+    "perfumes": [
+      78474,
+      47459,
+      8442,
+      29157,
+      31666,
+      49615,
+      74914,
+      83320
+    ]
+  },
+  {
+    "title": "Aura de Seda",
+    "description": "Graciosa y suave como la seda: estos aromas hablan de elegancia.",
+    "icon": "umbrella",
+    "gender": "female",
+    "perfumes": [
+      56992,
+      83889,
+      802,
+      209,
+      147,
+      62036,
+      631,
+      46410
+    ]
+  },
+  {
+    "title": "Pétalos Reales",
+    "description": "Una mezcla majestuosa de las flores más finas de la naturaleza.",
+    "icon": "gift",
+    "gender": "female",
+    "perfumes": [
+      56992,
+      56741,
+      4094,
+      1460,
+      65560,
+      62377,
+      44894,
+      83483
+    ]
+  }
+]

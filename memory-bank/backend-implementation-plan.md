@@ -255,3 +255,211 @@ sequenceDiagram
 *   **Environment Variables:** Manage secrets.
 *   **CORS:** Configure allowed origins for production.
 *   **HTTPS:** Enforce HTTPS.
+
+---
+
+## 11. Detailed Implementation Steps (Phases 3-8)
+
+### Phase 3: Survey & Match Percentage Storage
+- **Models:**
+  - `SurveyResponse` (user, response_data, completed_at)
+  - `UserPerfumeMatch` (user, perfume, match_percentage, last_updated)
+- **Migrations:**
+  - Create migrations for both models.
+- **Serializers:**
+  - `SurveyResponseSerializer` (validate JSON, handle create/update)
+- **Views:**
+  - `SurveyResponseView` (POST, requires auth)
+    - On submission, create or update the user's survey.
+    - Placeholder: trigger ML calculation (future).
+- **Perfume Serializer:**
+  - Add `match_percentage` as `SerializerMethodField`
+  - Initially return `null` or existing value.
+- **URLs:**
+  - Map `/api/survey/` to the view.
+- **Tests:**
+  - Create survey
+  - Update survey
+  - Retrieve perfumes with personalized match_percentage
+
+### Phase 4: Cart API
+- **Models:**
+  - `Cart` (OneToOne with User)
+  - `CartItem` (FK to Cart, FK to Perfume, quantity, decant_size, price_at_addition, product_type)
+- **Migrations:**
+  - Create migrations for both models.
+- **Serializers:**
+  - `CartSerializer` (nested items)
+  - `CartItemSerializer`
+- **Views:**
+  - `CartViewSet` (GET cart, POST add item, DELETE item, DELETE all)
+  - Permissions: Authenticated only
+- **URLs:**
+  - `/api/cart/`
+  - `/api/cart/items/`
+- **Tests:**
+  - Add item
+  - Remove item
+  - Clear cart
+  - Retrieve cart
+
+### Phase 5: Box Logic API
+- **Models:**
+  - `PredefinedBox` (name, description, perfumes M2M)
+  - Future: `AIBoxConfig`, `ManualBoxConfig`
+- **Migrations:**
+  - Create migrations
+- **Serializers:**
+  - `PredefinedBoxSerializer` (nested perfumes)
+- **Views:**
+  - List predefined boxes
+  - Retrieve box details
+- **URLs:**
+  - `/api/boxes/predefined/`
+- **Tests:**
+  - List boxes
+  - Retrieve box
+
+### Phase 6: Subscription API
+- **Models:**
+  - `SubscriptionTier` (name, price, decant_size, criteria)
+  - `UserSubscription` (user, tier, start_date, is_active)
+- **Migrations:**
+  - Create migrations
+- **Serializers:**
+  - `SubscriptionTierSerializer`
+  - `UserSubscriptionSerializer`
+- **Views:**
+  - List tiers
+  - Subscribe/unsubscribe
+  - Check status
+- **URLs:**
+  - `/api/subscriptions/tiers/`
+  - `/api/subscriptions/status/`
+  - `/api/subscriptions/subscribe/`
+  - `/api/subscriptions/unsubscribe/`
+- **Tests:**
+  - Subscribe
+  - Unsubscribe
+  - List tiers
+  - Check status
+
+### Phase 7: Orders & Checkout API
+- **Models:**
+  - `Order` (user, total_price, status, shipping_address, order_date, payment_details)
+  - `OrderItem` (order, perfume, quantity, decant_size, price_at_purchase)
+- **Migrations:**
+  - Create migrations
+- **Serializers:**
+  - `OrderSerializer` (nested items)
+  - `OrderItemSerializer`
+- **Views:**
+  - Create order from cart
+  - List orders
+  - Retrieve order
+- **URLs:**
+  - `/api/orders/`
+- **Tests:**
+  - Create order
+  - List orders
+  - Retrieve order
+
+### Phase 8: Ratings & Favorites API
+- **Models:**
+  - `Rating` (user, perfume, rating, timestamp)
+  - `Favorite` (user, perfume)
+- **Migrations:**
+  - Create migrations
+- **Serializers:**
+  - `RatingSerializer`
+  - `FavoriteSerializer`
+- **Views:**
+  - Add/update rating
+  - Get rating
+  - Add/remove favorite
+  - List favorites
+- **URLs:**
+  - `/api/perfumes/{id}/rating/`
+  - `/api/favorites/`
+- **Tests:**
+  - Add/update rating
+  - Get rating
+  - Add/remove favorite
+  - List favorites
+
+---
+
+## 12. Data Population Strategy
+
+- **Brands, Occasions, Accords:**
+  - Create fixtures (JSON/YAML) or Django admin entries.
+  - Optionally, write management commands to import from CSV.
+- **Perfumes:**
+  - Prepare CSV/JSON with fields: name, brand, description, notes (JSON), pricePerML, URLs, gender, occasions, accords.
+  - Write import script or use fixtures.
+- **Predefined Boxes:**
+  - Populate via admin or fixtures linking to perfumes.
+- **Subscription Tiers:**
+  - Seed initial tiers via fixtures or admin.
+
+---
+
+## 13. Admin Interface
+
+- Register all models with Django admin.
+- Use `list_display`, `search_fields`, `filter_horizontal` for M2M.
+- Inline related models (e.g., CartItems in Cart).
+- Restrict sensitive data (e.g., payment details).
+- Add import/export actions if needed.
+
+---
+
+## 14. Security & Validation Standards
+
+- Use DRF permissions (`IsAuthenticated`, `IsAdminUser`) appropriately.
+- Validate all serializer inputs strictly.
+- Sanitize user inputs.
+- Enforce ownership checks (e.g., users can only modify their own cart, survey, ratings).
+- Use throttling for sensitive endpoints.
+- Store passwords securely (Django default).
+- Plan for HTTPS in production.
+- Protect API keys/secrets via environment variables.
+
+---
+
+## 15. Performance & Scalability Notes
+
+- Use select_related/prefetch_related in queries to reduce DB hits.
+- Paginate large lists (perfumes, orders).
+- Index foreign keys and frequently filtered fields.
+- Consider caching popular endpoints (perfume list).
+- Plan for PostgreSQL migration for production.
+- Use async tasks (Celery) for heavy ML calculations (future).
+
+---
+
+## 16. Future Roadmap
+
+- **ML Model Integration:**
+  - Develop and train personalized recommendation model.
+  - Integrate with survey and ratings.
+  - Expose match_percentage dynamically.
+- **Payment Integration:**
+  - Stripe, PayPal, or other.
+  - Secure payment flows.
+- **Order Fulfillment:**
+  - Shipping integration.
+  - Order status tracking.
+- **Notifications:**
+  - Email, push notifications.
+- **Admin Dashboard Enhancements:**
+  - Analytics, user management.
+- **Multi-language Support**
+- **Multi-currency Support**
+- **Advanced Filtering & Search**
+- **User Profile Enhancements**
+- **Referral & Rewards System**
+
+---
+
+*Last updated: 2025-04-08 12:28:51*
