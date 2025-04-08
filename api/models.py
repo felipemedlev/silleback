@@ -1,0 +1,224 @@
+from django.contrib.auth.models import AbstractUser
+from django.db import models
+from django.conf import settings
+from django.core.exceptions import ValidationError # Moved import to top
+
+
+# Create your models here.
+
+class User(AbstractUser):
+    # Fields from AbstractUser: username, first_name, last_name, email, password,
+    # groups, user_permissions, is_staff, is_active, is_superuser, last_login, date_joined
+
+    # Use email as the primary identifier instead of username
+    USERNAME_FIELD = 'email'
+    # 'username' is still required by default for createsuperuser command
+    # if it's part of the model. We keep it here but make it optional for regular use.
+    REQUIRED_FIELDS = ['username']
+
+    # Ensure email is unique and stored
+    email = models.EmailField(unique=True, blank=False, null=False) # Make email explicitly required
+
+    # Make username optional and not unique for regular users
+    username = models.CharField(
+        max_length=150,
+        unique=False, # Allow multiple users to potentially have no username or same placeholder
+        blank=True,
+        null=True
+    )
+
+    # Add custom fields
+    phone = models.CharField(max_length=20, blank=True, null=True)
+    address = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return self.email
+
+
+
+class Brand(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+
+    def __str__(self):
+        return self.name
+
+class Occasion(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+
+    def __str__(self):
+        return self.name
+
+class Accord(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return self.name
+
+class Perfume(models.Model):
+    # Choices definitions
+    GENDER_CHOICES = [
+        ('male', 'Male'),
+        ('female', 'Female'),
+        ('unisex', 'Unisex'),
+    ]
+    SEASON_CHOICES = [
+        ('winter', 'Winter'),
+        ('summer', 'Summer'),
+        ('autumn', 'Autumn'),
+        ('spring', 'Spring'),
+    ]
+    BEST_FOR_CHOICES = [
+        ('day', 'Day'),
+        ('night', 'Night'),
+    ]
+
+    # Core Info
+    name = models.CharField(max_length=200)
+    brand = models.ForeignKey(Brand, on_delete=models.CASCADE, related_name='perfumes')
+    external_id = models.CharField(max_length=50, unique=True, db_index=True, null=True, blank=True, help_text="ID from the source CSV")
+    year_released = models.IntegerField(null=True, blank=True)
+    country_origin = models.CharField(max_length=100, blank=True, null=True)
+
+    # Description & Composition
+    description = models.TextField(blank=True, null=True)
+    top_notes = models.JSONField(default=list, blank=True, help_text='List of top note names')
+    middle_notes = models.JSONField(default=list, blank=True, help_text='List of middle note names')
+    base_notes = models.JSONField(default=list, blank=True, help_text='List of base note names')
+    accords = models.ManyToManyField(Accord, blank=True, related_name='perfumes')
+
+    # Categorization & Usage
+    gender = models.CharField(max_length=10, choices=GENDER_CHOICES, blank=True, null=True) # Allow blank/null if data missing
+    occasions = models.ManyToManyField(Occasion, blank=True, related_name='perfumes')
+    season = models.CharField(max_length=10, choices=SEASON_CHOICES, blank=True, null=True)
+    best_for = models.CharField(max_length=5, choices=BEST_FOR_CHOICES, blank=True, null=True)
+
+    # Pricing & URLs
+    pricePerML = models.DecimalField(max_digits=6, decimal_places=2, help_text='Price per milliliter', null=True, blank=True) # Allow null
+    thumbnailUrl = models.URLField(max_length=500, blank=True, null=True)
+    fullSizeUrl = models.URLField(max_length=500, blank=True, null=True)
+
+    # Ratings & Performance (from CSV)
+    overall_rating = models.FloatField(null=True, blank=True, help_text="Overall rating from source")
+    rating_count = models.IntegerField(default=0, help_text="Number of ratings from source")
+    longevity_rating = models.FloatField(null=True, blank=True, help_text="Longevity rating (0-1) from source")
+    sillage_rating = models.FloatField(null=True, blank=True, help_text="Sillage rating (0-1) from source")
+    price_value_rating = models.FloatField(null=True, blank=True, help_text="Price/Value rating (0-1) from source")
+    popularity = models.IntegerField(default=0, help_text="Popularity score based on recent magnitude")
+
+    # Relationships (from CSV, stored as IDs)
+    similar_perfume_ids = models.JSONField(default=list, blank=True, help_text="List of external_ids of similar perfumes")
+    recommended_perfume_ids = models.JSONField(default=list, blank=True, help_text="List of external_ids of recommended perfumes")
+
+    # Internal fields (Consider adding fields for ML later, e.g., embeddings)
+
+    def __str__(self):
+        return f"{self.name} by {self.brand.name}"
+
+
+
+class SurveyResponse(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='survey_response')
+    response_data = models.JSONField(default=dict, blank=True) # Stores survey answers as JSON
+    completed_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Survey Response for {self.user.email}"
+
+class UserPerfumeMatch(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='perfume_matches')
+    perfume = models.ForeignKey('Perfume', on_delete=models.CASCADE, related_name='user_matches')
+    match_percentage = models.DecimalField(
+        max_digits=4,       # Allows for 1.000
+        decimal_places=3,   # Three decimal places
+        null=True,          # Allow null if no prediction exists yet
+        blank=True
+    )
+    last_updated = models.DateTimeField(auto_now=True) # Track when it was last calculated
+
+    class Meta:
+        unique_together = ('user', 'perfume') # Ensure only one match entry per user-perfume pair
+        indexes = [
+            models.Index(fields=['user', 'perfume']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.email} - {self.perfume.name}: {self.match_percentage}"
+
+
+
+class Cart(models.Model):
+    """
+    Represents a user's shopping cart.
+    """
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='cart')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Cart for {self.user.email}"
+
+class CartItem(models.Model):
+    """
+    Represents an item within a shopping cart.
+    Can be a single perfume or a configured box.
+    """
+    PRODUCT_TYPE_CHOICES = [
+        ('perfume', 'Perfume'),
+        ('box', 'Box'), # For predefined or custom boxes
+    ]
+
+    cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name='items')
+    product_type = models.CharField(max_length=10, choices=PRODUCT_TYPE_CHOICES, default='perfume')
+    # Link to Perfume, nullable if it's a box defined by box_configuration
+    perfume = models.ForeignKey(Perfume, on_delete=models.CASCADE, null=True, blank=True, related_name='cart_items')
+    quantity = models.PositiveIntegerField(default=1)
+    # Decant size in ML, relevant for perfume items or subscription box items
+    decant_size = models.IntegerField(null=True, blank=True, help_text="Size of decant in ML, if applicable")
+    # Store price at the time of addition to handle price fluctuations
+    price_at_addition = models.DecimalField(max_digits=10, decimal_places=2)
+    # For custom boxes (AI or Manual), store configuration details
+    box_configuration = models.JSONField(null=True, blank=True, help_text="JSON configuration for custom boxes")
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        if self.product_type == 'perfume' and self.perfume:
+            item_name = self.perfume.name
+        elif self.product_type == 'box':
+            item_name = "Custom Box" # Or derive from box_configuration if possible
+        else:
+            item_name = "Unknown Item"
+        return f"{self.quantity} x {item_name} in cart {self.cart.id}"
+
+    def clean(self):
+        # Ensure either perfume or box_configuration is set depending on product_type
+        # from django.core.exceptions import ValidationError # Import moved to top
+        if self.product_type == 'perfume' and not self.perfume:
+            raise ValidationError("Perfume must be selected for product_type 'perfume'.")
+        if self.product_type == 'box' and not self.box_configuration:
+             # Allow box_configuration to be null initially, maybe set later? Or require it?
+             # For now, let's allow it to be potentially set later.
+             pass
+             # raise ValidationError("Box configuration must be provided for product_type 'box'.")
+        if self.product_type == 'box' and self.perfume:
+            raise ValidationError("Perfume should not be set for product_type 'box'.")
+
+
+
+class PredefinedBox(models.Model):
+    """
+    Represents a curated box with a fixed set of perfumes.
+    """
+    name = models.CharField(max_length=200, unique=True)
+    description = models.TextField(blank=True, null=True)
+    perfumes = models.ManyToManyField(Perfume, related_name='predefined_boxes', blank=True)
+    # Consider adding fields like price, image_url, etc. later if needed
+
+    def __str__(self):
+        return self.name
+
+# Add other models here later (Order, Subscription, Rating, Favorite, etc.)
+
+# Add other models here later (Order, Subscription, Rating, Favorite, etc.)
+
+# Add other models here later (Perfume, Brand, Cart, Order, etc.)
