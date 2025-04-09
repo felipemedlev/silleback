@@ -15,7 +15,7 @@ class User(AbstractUser):
     USERNAME_FIELD = 'email'
     # 'username' is still required by default for createsuperuser command
     # if it's part of the model. We keep it here but make it optional for regular use.
-    REQUIRED_FIELDS = ['username']
+    REQUIRED_FIELDS = []
 
     # Ensure email is unique and stored
     email = models.EmailField(unique=True, blank=False, null=False) # Make email explicitly required

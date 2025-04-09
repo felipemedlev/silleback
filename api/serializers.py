@@ -12,11 +12,20 @@ User = get_user_model() # Get the custom User model defined in settings.AUTH_USE
 
 class UserCreateSerializer(BaseUserCreateSerializer):
     """
-    Serializer for creating users. Includes custom fields.
+    Serializer for creating users with optional username.
     """
+    username = serializers.CharField(required=False)  # Make username optional
+
+    def create(self, validated_data):
+        # If username is not provided, use the first part of email as username
+        if 'username' not in validated_data:
+            email = validated_data.get('email')
+            username = email.split('@')[0]
+            validated_data['username'] = username
+        return super().create(validated_data)
+
     class Meta(BaseUserCreateSerializer.Meta):
         model = User
-        # Specify fields available during registration
         fields = ('id', 'email', 'username', 'password', 'phone', 'address')
 
 class UserSerializer(BaseUserSerializer):

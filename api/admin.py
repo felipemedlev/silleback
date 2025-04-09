@@ -9,7 +9,19 @@ from .models import (
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
-    list_display = ('email', 'username', 'is_active', 'is_staff', 'date_joined')
+    list_display = ('email', 'username', 'phone', 'address', 'is_active', 'is_staff', 'date_joined')
+
+    fieldsets = BaseUserAdmin.fieldsets + (
+        ('Additional Info', {
+            'fields': ('phone', 'address'),
+        }),
+    )
+
+    add_fieldsets = BaseUserAdmin.add_fieldsets + (
+        ('Additional Info', {
+            'fields': ('phone', 'address'),
+        }),
+    )
     search_fields = ('email', 'username')
     ordering = ('email',)
 

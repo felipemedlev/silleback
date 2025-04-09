@@ -3,6 +3,8 @@ from rest_framework.response import Response # Add Response
 from rest_framework import serializers
 from rest_framework.decorators import action # Import action decorator
 from django.shortcuts import get_object_or_404 # Import get_object_or_404
+from rest_framework import filters as drf_filters
+from django_filters.rest_framework import DjangoFilterBackend
 from django.db import transaction # Import transaction
 from .models import ( # Add Cart, CartItem, PredefinedBox, SubscriptionTier, UserSubscription, Order, OrderItem, Rating, Favorite
     Brand, Occasion, Accord, Perfume, User, SurveyResponse, UserPerfumeMatch,
@@ -53,12 +55,32 @@ class PerfumeViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Perfume.objects.select_related('brand').prefetch_related('occasions', 'accords').all()
     serializer_class = PerfumeSerializer
     permission_classes = [permissions.AllowAny] # Allow anyone to view perfumes
-    # Add filter backends for searching and filtering later if needed
-    # filter_backends = [filters.SearchFilter, DjangoFilterBackend]
-    # search_fields = ['name', 'description', 'brand__name']
-    # filterset_fields = ['gender', 'brand', 'occasions', 'accords']
+    # Add filter backends for searching and filtering
+    filter_backends = [drf_filters.SearchFilter, DjangoFilterBackend]
+    search_fields = ['name', 'description', 'brand__name'] # Fields for ?search=...
+    filterset_fields = ['gender', 'brand', 'occasions', 'accords'] # Fields for exact match filtering ?gender=unisex
 
 # Note: User views (register, login, me, etc.) are handled by Djoser URLs
+    @action(detail=False, methods=['get'], url_path='by_external_ids')
+    def by_external_ids(self, request):
+        """
+        Retrieve a list of perfumes based on their external IDs.
+        Expects a comma-separated list of IDs in the 'external_ids' query parameter.
+        e.g., /api/perfumes/by_external_ids/?external_ids=id1,id2,id3
+        """
+        external_ids_str = request.query_params.get('external_ids', None)
+        if not external_ids_str:
+            return Response({"detail": "Missing 'external_ids' query parameter."}, status=status.HTTP_400_BAD_REQUEST)
+
+        external_ids_list = [pid.strip() for pid in external_ids_str.split(',') if pid.strip()]
+        if not external_ids_list:
+            return Response({"detail": "'external_ids' query parameter cannot be empty."}, status=status.HTTP_400_BAD_REQUEST)
+
+        queryset = self.get_queryset().filter(external_id__in=external_ids_list)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+
 
 
 

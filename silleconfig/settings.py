@@ -108,6 +108,9 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {
         'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'OPTIONS': {
+            'min_length': 8,
+        }
     },
     {
         'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
@@ -133,7 +136,11 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',
-    )
+    ),
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
+    'NON_FIELD_ERRORS_KEY': 'error',
+    'EXCEPTION_HANDLER': 'rest_framework.views.exception_handler'
 }
 
 LANGUAGE_CODE = 'en-us'
@@ -158,15 +165,23 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Djoser settings
 DJOSER = {
-    'PASSWORD_RESET_CONFIRM_URL': '#/password/reset/confirm/{uid}/{token}',
-    'USERNAME_RESET_CONFIRM_URL': '#/username/reset/confirm/{uid}/{token}',
-    'ACTIVATION_URL': '#/activate/{uid}/{token}',
-    'SEND_ACTIVATION_EMAIL': False,
-    'USER_ID_FIELD': 'id',
-    'LOGIN_FIELD': 'email',
     'SERIALIZERS': {
-         'user_create': 'api.serializers.UserCreateSerializer',
-         'user': 'api.serializers.UserSerializer',
-         'current_user': 'api.serializers.UserSerializer',
+        'user_create': 'api.serializers.UserCreateSerializer',
+        'user': 'api.serializers.UserSerializer',
+        'current_user': 'api.serializers.UserSerializer',
+        'password_reset': 'djoser.serializers.PasswordResetSerializer',
+        'password_reset_confirm': 'djoser.serializers.PasswordResetConfirmSerializer',
     },
+    'PASSWORD_VALIDATORS': AUTH_PASSWORD_VALIDATORS,
+    'PASSWORD_RESET_SHOW_EMAIL_NOT_FOUND': True,
+    'PASSWORD_CHANGED_EMAIL_CONFIRMATION': True,
+    'CONSTANTS': {
+        'INVALID_PASSWORD_ERROR': 'La contraseña debe tener al menos 8 caracteres y no puede ser completamente numérica.',
+        'CANNOT_CREATE_USER_ERROR': 'No se puede crear el usuario con los datos proporcionados.',
+        'PASSWORD_MISMATCH_ERROR': 'Las contraseñas no coinciden.',
+        'INVALID_CREDENTIALS_ERROR': 'No se puede iniciar sesión con las credenciales proporcionadas.',
+    },
+    'EMAIL': {
+        'password_reset': 'djoser.email.PasswordResetEmail',
+    }
 }
