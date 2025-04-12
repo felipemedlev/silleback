@@ -207,7 +207,7 @@ class PredefinedBoxSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PredefinedBox
-        fields = ('id', 'name', 'description', 'perfumes')
+        fields = ('id', 'title', 'description', 'icon', 'gender', 'perfumes') # Added icon, gender, corrected name->title
         # Add other fields like price, image_url if they are added to the model
 
 # --- End Box Serializers ---

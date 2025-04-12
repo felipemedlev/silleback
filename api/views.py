@@ -5,6 +5,7 @@ from rest_framework.decorators import action # Import action decorator
 from django.shortcuts import get_object_or_404 # Import get_object_or_404
 from rest_framework import filters as drf_filters
 from django_filters.rest_framework import DjangoFilterBackend
+from .filters import PerfumeFilter # Import the custom filterset
 from django.db import transaction # Import transaction
 from .models import ( # Add Cart, CartItem, PredefinedBox, SubscriptionTier, UserSubscription, Order, OrderItem, Rating, Favorite
     Brand, Occasion, Accord, Perfume, User, SurveyResponse, UserPerfumeMatch,
@@ -58,7 +59,8 @@ class PerfumeViewSet(viewsets.ReadOnlyModelViewSet):
     # Add filter backends for searching and filtering
     filter_backends = [drf_filters.SearchFilter, DjangoFilterBackend]
     search_fields = ['name', 'description', 'brand__name'] # Fields for ?search=...
-    filterset_fields = ['gender', 'brand', 'occasions', 'accords'] # Fields for exact match filtering ?gender=unisex
+    # filterset_fields = ['gender', 'brand', 'occasions', 'accords'] # Replaced by filterset_class
+    filterset_class = PerfumeFilter # Use the custom filterset class
 
 # Note: User views (register, login, me, etc.) are handled by Djoser URLs
     @action(detail=False, methods=['get'], url_path='by_external_ids')
@@ -223,6 +225,8 @@ class PredefinedBoxViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = PredefinedBox.objects.prefetch_related('perfumes').all() # Prefetch perfumes for efficiency
     serializer_class = PredefinedBoxSerializer
     permission_classes = [permissions.AllowAny] # Allow anyone to view predefined boxes
+    filter_backends = [DjangoFilterBackend] # Add filter backend
+    filterset_fields = ['gender'] # Enable filtering by gender
 
 # --- End Box ViewSets ---
 
