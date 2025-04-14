@@ -4,7 +4,7 @@ from .models import (
     User, Brand, Occasion, Accord, Perfume,
     PredefinedBox, SubscriptionTier, UserSubscription,
     Cart, CartItem, Order, OrderItem,
-    Rating, Favorite, SurveyResponse, UserPerfumeMatch
+    Rating, Favorite, SurveyResponse, UserPerfumeMatch, SurveyQuestion
 )
 
 @admin.register(User)
@@ -104,3 +104,25 @@ class SurveyResponseAdmin(admin.ModelAdmin):
 class UserPerfumeMatchAdmin(admin.ModelAdmin):
     list_display = ('user', 'perfume', 'match_percentage', 'last_updated')
     search_fields = ('user__email', 'perfume__name')
+
+
+@admin.register(SurveyQuestion)
+class SurveyQuestionAdmin(admin.ModelAdmin):
+    list_display = ('text', 'question_type', 'accord', 'order', 'is_active')
+    list_filter = ('question_type', 'is_active')
+    search_fields = ('text', 'accord__name')
+    list_editable = ('order', 'is_active')
+    ordering = ('order',)
+
+    fieldsets = (
+        (None, {
+            'fields': ('text', 'question_type', 'order', 'is_active')
+        }),
+        ('Type Specific', {
+            'fields': ('accord', 'options'),
+            'description': "Fill 'accord' if type is 'accord'. Fill 'options' (as JSON) if type is 'gender'."
+        }),
+    )
+
+    # Optional: Add validation or custom logic if needed
+    # def clean(self): ...

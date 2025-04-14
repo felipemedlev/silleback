@@ -147,6 +147,43 @@ class UserPerfumeMatch(models.Model):
         return f"{self.user.email} - {self.perfume.name}: {self.match_percentage}"
 
 
+class SurveyQuestion(models.Model):
+    QUESTION_TYPE_CHOICES = [
+        ('gender', 'Gender Selection'),
+        ('accord', 'Accord Preference'),
+        # Add other types if needed later
+    ]
+
+    question_type = models.CharField(max_length=20, choices=QUESTION_TYPE_CHOICES)
+    text = models.CharField(max_length=255, help_text="The question text presented to the user.")
+    # For 'gender' type, options are predefined. For 'accord', it links to an Accord.
+    # We can store options as JSON for flexibility, especially for gender.
+    options = models.JSONField(null=True, blank=True, help_text="JSON defining options (e.g., for gender: [{'id': 'male', 'label': 'Masculinas', 'emoji': '👨'}])")
+    # Link to Accord model if question_type is 'accord'
+    accord = models.ForeignKey(Accord, on_delete=models.SET_NULL, null=True, blank=True, related_name='survey_questions', help_text="Associated accord, if question_type is 'accord'.")
+    order = models.PositiveIntegerField(default=0, help_text="Order in which the question appears in the survey.")
+    is_active = models.BooleanField(default=True, help_text="Whether this question is currently used in the survey.")
+
+    class Meta:
+        ordering = ['order'] # Ensure questions are fetched in the correct order
+
+    def __str__(self):
+        return f"({self.order}) {self.text[:50]}..."
+
+    def clean(self):
+        # Validation: Ensure 'accord' is set if type is 'accord', and null otherwise.
+        # Ensure 'options' is set if type is 'gender', and null otherwise.
+        if self.question_type == 'accord' and not self.accord:
+            raise ValidationError("An Accord must be linked for question_type 'accord'.")
+        if self.question_type != 'accord' and self.accord:
+            raise ValidationError("Accord should only be linked for question_type 'accord'.")
+        if self.question_type == 'gender' and not self.options:
+             raise ValidationError("Options must be defined for question_type 'gender'.")
+        if self.question_type != 'gender' and self.options:
+             raise ValidationError("Options should only be defined for question_type 'gender'.")
+
+
+
 
 class Cart(models.Model):
     """

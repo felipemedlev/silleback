@@ -41,3 +41,11 @@ This file records architectural and implementation decisions using a list format
     *   **Rationale:** Provides a structured format (`{"top": [], "middle": [], "base": []}`) which is more suitable for future ML integration compared to a simple `TextField`. User confirmed preference.
     *   **Implementation:** Defined `notes = models.JSONField(...)` in the `Perfume` model in `api/models.py`.
 *
+
+---
+
+**[2025-04-13 21:29:17] - Survey Admin Panel Integration**
+
+*   **Decision:** Make survey questions endpoint available in Django admin panel
+    *   **Rationale:** User requested ability to view and modify survey questions through admin interface for easier management
+    *   **Implementation:** Added SurveyQuestionsView to admin.py with appropriate display fields and search capabilities

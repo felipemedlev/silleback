@@ -36,3 +36,4 @@ This file tracks the project's progress using a task list format.
 * [2025-04-08 1:16:19] - Completed Phase 6 (Subscription API): Defined models, serializers, ViewSet (list_tiers, get_status, subscribe, unsubscribe), and URL routing.
 * [2025-04-08 1:16:19] - Completed Phase 7 (Orders & Checkout API): Defined models, serializers, ViewSet (create, list, retrieve), and URL routing.
 * [2025-04-08 1:16:19] - Completed Phase 8 (Ratings & Favorites API): Defined models, serializers, Views (Rating, Favorite), and URL routing.
+* [2025-04-13 21:29:49] - Added survey questions endpoint to Django admin panel for easier management

@@ -7,10 +7,11 @@ from rest_framework import filters as drf_filters
 from django_filters.rest_framework import DjangoFilterBackend
 from .filters import PerfumeFilter # Import the custom filterset
 from django.db import transaction # Import transaction
+# Q object import removed as it's no longer used in this view
 from .models import ( # Add Cart, CartItem, PredefinedBox, SubscriptionTier, UserSubscription, Order, OrderItem, Rating, Favorite
     Brand, Occasion, Accord, Perfume, User, SurveyResponse, UserPerfumeMatch,
     Cart, CartItem, PredefinedBox, SubscriptionTier, UserSubscription,
-    Order, OrderItem, Rating, Favorite
+    Order, OrderItem, Rating, Favorite, SurveyQuestion # Added SurveyQuestion
 )
 from .serializers import ( # Add CartSerializer, CartItemSerializer, CartItemAddSerializer, PredefinedBoxSerializer, SubscriptionTierSerializer, UserSubscriptionSerializer, SubscribeSerializer, OrderSerializer, OrderItemSerializer, OrderCreateSerializer, RatingSerializer, FavoriteSerializer, FavoriteListSerializer
     BrandSerializer, OccasionSerializer, AccordSerializer, PerfumeSerializer,
@@ -58,6 +59,46 @@ class PerfumeViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.AllowAny] # Allow anyone to view perfumes
     # Add filter backends for searching and filtering
     filter_backends = [drf_filters.SearchFilter, DjangoFilterBackend]
+
+# --- Survey Questions API View ---
+from rest_framework import generics
+
+class SurveyQuestionsView(generics.GenericAPIView):
+    """
+    API endpoint to fetch the list of survey questions (gender + selected accords).
+    """
+    permission_classes = [permissions.AllowAny]
+    queryset = SurveyQuestion.objects.filter(is_active=True) # Use the new model
+
+    def get(self, request, *args, **kwargs):
+        """
+        Fetch active survey questions from the database.
+        """
+        # Fetch active questions, ordered correctly, prefetching related accord if present
+        questions_qs = SurveyQuestion.objects.filter(is_active=True).select_related('accord').order_by('order')
+        formatted_questions = []
+
+        for question in questions_qs:
+            if question.question_type == 'gender':
+                # Format gender question using its text and options JSON
+                formatted_questions.append({
+                    "id": str(question.pk), # Use primary key as ID
+                    "type": "gender",
+                    "question": question.text,
+                    "options": question.options # Assumes options JSON is correctly formatted in DB
+                })
+            elif question.question_type == 'accord' and question.accord:
+                 # Format accord question using its text and related accord info
+                formatted_questions.append({
+                    "id": str(question.pk), # Use primary key as ID
+                    "accord": question.accord.name,
+                    "description": question.accord.description or "",
+                    # Include the question text itself, as the frontend might need it
+                    "question": question.text
+                })
+            # Add elif blocks here for other question types if they are added later
+
+        return Response(formatted_questions)
     search_fields = ['name', 'description', 'brand__name'] # Fields for ?search=...
     # filterset_fields = ['gender', 'brand', 'occasions', 'accords'] # Replaced by filterset_class
     filterset_class = PerfumeFilter # Use the custom filterset class
@@ -92,22 +133,28 @@ class SurveyResponseSubmitView(generics.GenericAPIView):
     Requires authentication. Accepts POST requests with survey data in the body.
     """
     serializer_class = SurveyResponseSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny] # Allow anonymous POST, but logic will check auth
 
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True) # Validate incoming data
 
-        # Use update_or_create to handle both initial submission and updates
-        survey_response, created = SurveyResponse.objects.update_or_create(
-            user=request.user,
-            defaults={'response_data': serializer.validated_data['response_data']}
-        )
-
-        # Return the saved data with appropriate status code
-        response_serializer = self.get_serializer(survey_response)
-        status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
-        return Response(response_serializer.data, status=status_code)
+        # Only save if the user is authenticated
+        if request.user.is_authenticated:
+            # Use update_or_create to handle both initial submission and updates
+            survey_response, created = SurveyResponse.objects.update_or_create(
+                user=request.user,
+                defaults={'response_data': serializer.validated_data['response_data']}
+            )
+            # Return the saved data with appropriate status code
+            response_serializer = self.get_serializer(survey_response)
+            status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+            return Response(response_serializer.data, status=status_code)
+        else:
+            # For anonymous users, just validate and return success without saving
+            # Or return a specific status/message if needed, but 200 OK is fine for now
+            # as the frontend will handle the actual saving post-login.
+            return Response(serializer.validated_data, status=status.HTTP_200_OK)
 
 
 

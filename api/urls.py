@@ -19,6 +19,7 @@ router.register(r'favorites', views.FavoriteViewSet, basename='favorite') # Regi
 urlpatterns = [
     path('', include(router.urls)), # Includes router-generated URLs like /favorites/, /favorites/{pk}/, /favorites/perfume/{perfume_pk}/
     path('survey/', views.SurveyResponseSubmitView.as_view(), name='survey-submit'),
+    path('survey/questions/', views.SurveyQuestionsView.as_view(), name='survey-questions'),
     # Add path for perfume rating view (GET/POST)
     path('perfumes/<int:perfume_id>/rating/', views.PerfumeRatingView.as_view(), name='perfume-rating'),
 
