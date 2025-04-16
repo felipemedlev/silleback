@@ -30,6 +30,10 @@ This file tracks the project's current status, including recent changes, current
 * [2025-04-08 12:58:18] - Completed Phase 6 (Subscription API): Defined models, serializers, ViewSet (list_tiers, get_status, subscribe, unsubscribe), and URL routing.
 * [2025-04-01 23:01:32] - Phase 2 Progress: Defined models (Brand, Occasion, Accord, Perfume with JSONField for notes), serializers, read-only viewsets, and URLs for the perfume catalog.
 * [2025-04-08 12:39:10] - Completed Phase 5 (Box Logic API): Implemented read-only ViewSet and URL routing for PredefinedBox.
+* [2025-04-16 18:58] - Fixed incorrect placement of `filterset_class` in `api/views.py`, resolving issue with perfume filtering (brand, occasion, etc.).
+* [2025-04-16 19:04] - Fixed incorrect placement of `search_fields` in `api/views.py`, resolving issue with perfume search functionality.
+
+
 *
 
 ## Open Questions/Issues

@@ -59,6 +59,8 @@ class PerfumeViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.AllowAny] # Allow anyone to view perfumes
     # Add filter backends for searching and filtering
     filter_backends = [drf_filters.SearchFilter, DjangoFilterBackend]
+    filterset_class = PerfumeFilter # Use the custom filterset class
+    search_fields = ['name', 'description', 'brand__name'] # Fields for ?search=...
 
 # --- Survey Questions API View ---
 from rest_framework import generics
@@ -99,9 +101,9 @@ class SurveyQuestionsView(generics.GenericAPIView):
             # Add elif blocks here for other question types if they are added later
 
         return Response(formatted_questions)
-    search_fields = ['name', 'description', 'brand__name'] # Fields for ?search=...
+# Removed search_fields from SurveyQuestionsView as it belongs in PerfumeViewSet
     # filterset_fields = ['gender', 'brand', 'occasions', 'accords'] # Replaced by filterset_class
-    filterset_class = PerfumeFilter # Use the custom filterset class
+# Removed filterset_class from SurveyQuestionsView as it belongs in PerfumeViewSet
 
 # Note: User views (register, login, me, etc.) are handled by Djoser URLs
     @action(detail=False, methods=['get'], url_path='by_external_ids')

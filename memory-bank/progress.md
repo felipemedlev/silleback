@@ -37,3 +37,8 @@ This file tracks the project's progress using a task list format.
 * [2025-04-08 1:16:19] - Completed Phase 7 (Orders & Checkout API): Defined models, serializers, ViewSet (create, list, retrieve), and URL routing.
 * [2025-04-08 1:16:19] - Completed Phase 8 (Ratings & Favorites API): Defined models, serializers, Views (Rating, Favorite), and URL routing.
 * [2025-04-13 21:29:49] - Added survey questions endpoint to Django admin panel for easier management
+
+* [2025-04-16 18:58] - Debugged and fixed issue where brand/occasion filters were not applied to `/api/perfumes/` endpoint due to incorrect `filterset_class` placement in `api/views.py`.
+
+
+* [2025-04-16 19:04] - Fixed issue where search filter (`?search=...`) was not applied to `/api/perfumes/` endpoint due to incorrect `search_fields` placement in `api/views.py`.

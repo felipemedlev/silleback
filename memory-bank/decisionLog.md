@@ -49,3 +49,23 @@ This file records architectural and implementation decisions using a list format
 *   **Decision:** Make survey questions endpoint available in Django admin panel
     *   **Rationale:** User requested ability to view and modify survey questions through admin interface for easier management
     *   **Implementation:** Added SurveyQuestionsView to admin.py with appropriate display fields and search capabilities
+
+
+
+---
+
+**[2025-04-16 18:58] - Perfume Filter Fix**
+
+*   **Decision:** Corrected the placement of `filterset_class = PerfumeFilter` in `api/views.py`.
+    *   **Rationale:** The `filterset_class` was incorrectly assigned to `SurveyQuestionsView` instead of `PerfumeViewSet`, preventing the custom `PerfumeFilter` from being applied to the `/api/perfumes/` endpoint.
+    *   **Implementation:** Moved `filterset_class = PerfumeFilter` from `SurveyQuestionsView` definition to `PerfumeViewSet` definition. Debugged using print statements in `api/filters.py` (subsequently removed).
+
+
+
+---
+
+**[2025-04-16 19:04] - Perfume Search Fix**
+
+*   **Decision:** Corrected the placement of `search_fields` in `api/views.py`.
+    *   **Rationale:** The `search_fields` attribute was incorrectly assigned to `SurveyQuestionsView` instead of `PerfumeViewSet`, preventing the `SearchFilter` from being applied correctly to the `/api/perfumes/` endpoint.
+    *   **Implementation:** Moved `search_fields = [...]` from `SurveyQuestionsView` definition to `PerfumeViewSet` definition.
