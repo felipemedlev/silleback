@@ -94,35 +94,114 @@ class SurveyQuestionsView(generics.GenericAPIView):
     def get(self, request, *args, **kwargs):
         """
         Fetch active survey questions from the database.
+        If question_id is provided in kwargs, return that specific question.
         """
-        # Fetch active questions, ordered correctly, prefetching related accord if present
-        questions_qs = SurveyQuestion.objects.filter(is_active=True).select_related('accord').order_by('order')
-        formatted_questions = []
+        # Check if we're fetching a specific question
+        question_id = kwargs.get('question_id')
 
-        for question in questions_qs:
+        if question_id:
+            # Fetch single question by ID
+            try:
+                question = SurveyQuestion.objects.select_related('accord').get(pk=question_id)
+            except SurveyQuestion.DoesNotExist:
+                return Response({"detail": "Question not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            # Format response based on question type
             if question.question_type == 'gender':
-                # Format gender question using its text and options JSON
-                formatted_questions.append({
-                    "id": str(question.pk), # Use primary key as ID
+                result = {
+                    "id": str(question.pk),
                     "type": "gender",
                     "question": question.text,
-                    "options": question.options # Assumes options JSON is correctly formatted in DB
-                })
+                    "options": question.options
+                }
             elif question.question_type == 'accord' and question.accord:
-                 # Format accord question using its text and related accord info
-                formatted_questions.append({
-                    "id": str(question.pk), # Use primary key as ID
+                result = {
+                    "id": str(question.pk),
                     "accord": question.accord.name,
                     "description": question.accord.description or "",
-                    # Include the question text itself, as the frontend might need it
                     "question": question.text
-                })
-            # Add elif blocks here for other question types if they are added later
+                }
+            else:
+                # Generic format for other types
+                result = {
+                    "id": str(question.pk),
+                    "type": question.question_type,
+                    "question": question.text
+                }
 
-        return Response(formatted_questions)
+            return Response(result)
+        else:
+            # Fetch all active questions, ordered correctly, prefetching related accord if present
+            questions_qs = SurveyQuestion.objects.filter(is_active=True).select_related('accord').order_by('order')
+            formatted_questions = []
+
+            for question in questions_qs:
+                if question.question_type == 'gender':
+                    # Format gender question using its text and options JSON
+                    formatted_questions.append({
+                        "id": str(question.pk), # Use primary key as ID
+                        "type": "gender",
+                        "question": question.text,
+                        "options": question.options # Assumes options JSON is correctly formatted in DB
+                    })
+                elif question.question_type == 'accord' and question.accord:
+                     # Format accord question using its text and related accord info
+                    formatted_questions.append({
+                        "id": str(question.pk), # Use primary key as ID
+                        "accord": question.accord.name,
+                        "description": question.accord.description or "",
+                        # Include the question text itself, as the frontend might need it
+                        "question": question.text
+                    })
+                # Add elif blocks here for other question types if they are added later
+
+            return Response(formatted_questions)
 # Removed search_fields from SurveyQuestionsView as it belongs in PerfumeViewSet
     # filterset_fields = ['gender', 'brand', 'occasions', 'accords'] # Replaced by filterset_class
 # Removed filterset_class from SurveyQuestionsView as it belongs in PerfumeViewSet
+
+# Add SurveyQuestionViewSet for accessing individual questions
+class SurveyQuestionViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API endpoint that allows individual survey questions to be viewed.
+    """
+    queryset = SurveyQuestion.objects.all().select_related('accord')
+    permission_classes = [permissions.AllowAny]  # Allow anyone to view questions
+
+    def get_serializer_class(self):
+        """
+        Custom serialization based on the question type.
+        """
+        # We'll implement serialization directly in the retrieve method
+        return None
+
+    def retrieve(self, request, *args, **kwargs):
+        question = self.get_object()
+
+        # Format response based on question type
+        if question.question_type == 'gender':
+            result = {
+                "id": str(question.pk),
+                "type": "gender",
+                "question": question.text,
+                "options": question.options
+            }
+        elif question.question_type == 'accord' and question.accord:
+            result = {
+                "id": str(question.pk),
+                "accord": question.accord.name,
+                "description": question.accord.description or "",
+                "question": question.text
+            }
+        else:
+            # Generic format for other types
+            result = {
+                "id": str(question.pk),
+                "type": question.question_type,
+                "question": question.text
+            }
+
+        return Response(result)
 
 # Note: User views (register, login, me, etc.) are handled by Djoser URLs
 

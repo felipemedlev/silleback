@@ -13,13 +13,15 @@ router.register(r'boxes/predefined', views.PredefinedBoxViewSet, basename='prede
 router.register(r'subscriptions', views.SubscriptionViewSet, basename='subscription') # Register SubscriptionViewSet
 router.register(r'orders', views.OrderViewSet, basename='order') # Register OrderViewSet
 router.register(r'favorites', views.FavoriteViewSet, basename='favorite') # Register FavoriteViewSet
+router.register(r'surveyquestion', views.SurveyQuestionViewSet, basename='surveyquestion') # Register SurveyQuestionViewSet
 
 # The API URLs are now determined automatically by the router.
 # Additionally, we include the login URLs for the browsable API.
 urlpatterns = [
     path('', include(router.urls)), # Includes router-generated URLs like /favorites/, /favorites/{pk}/, /favorites/perfume/{perfume_pk}/
     path('survey/', views.SurveyResponseSubmitView.as_view(), name='survey-submit'),
-    path('survey/questions/', views.SurveyQuestionsView.as_view(), name='survey-questions'),
+    path('survey/questions/', views.SurveyQuestionsView.as_view(), name='survey-questions-list'),
+    path('survey/questions/<int:question_id>/', views.SurveyQuestionsView.as_view(), name='survey-questions-detail'),
     # Add path for perfume rating view (GET/POST)
     path('perfumes/<int:perfume_id>/rating/', views.PerfumeRatingView.as_view(), name='perfume-rating'),
 
