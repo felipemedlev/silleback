@@ -94,15 +94,15 @@ class Perfume(models.Model):
     # Description & Composition
     description = models.TextField(blank=True, null=True)
 
-    # Original notes as JSONField
+    # Original notes as JSONField (now commented out and replaced with ManyToMany)
     # top_notes = models.JSONField(default=list, blank=True, help_text='List of top note names')
     # middle_notes = models.JSONField(default=list, blank=True, help_text='List of middle note names')
     # base_notes = models.JSONField(default=list, blank=True, help_text='List of base note names')
 
     # ManyToMany relationships for notes
-    top_notes_m2m = models.ManyToManyField(Note, blank=True, related_name='perfumes_as_top')
-    middle_notes_m2m = models.ManyToManyField(Note, blank=True, related_name='perfumes_as_middle')
-    base_notes_m2m = models.ManyToManyField(Note, blank=True, related_name='perfumes_as_base')
+    top_notes = models.ManyToManyField(Note, blank=True, related_name='perfumes_as_top')
+    middle_notes = models.ManyToManyField(Note, blank=True, related_name='perfumes_as_middle')
+    base_notes = models.ManyToManyField(Note, blank=True, related_name='perfumes_as_base')
 
     accords = models.ManyToManyField(Accord, blank=True, related_name='perfumes')
 

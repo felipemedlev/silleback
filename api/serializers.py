@@ -67,9 +67,9 @@ class PerfumeSerializer(serializers.ModelSerializer):
     occasions = serializers.StringRelatedField(many=True)
     accords = serializers.StringRelatedField(many=True)
     # Add notes as string representations
-    top_notes_m2m = serializers.StringRelatedField(many=True)
-    middle_notes_m2m = serializers.StringRelatedField(many=True)
-    base_notes_m2m = serializers.StringRelatedField(many=True)
+    top_notes = serializers.StringRelatedField(many=True)
+    middle_notes = serializers.StringRelatedField(many=True)
+    base_notes = serializers.StringRelatedField(many=True)
     # Add personalized match percentage field
     match_percentage = serializers.SerializerMethodField()
 
@@ -78,8 +78,7 @@ class PerfumeSerializer(serializers.ModelSerializer):
         # Include all relevant fields for the perfume catalog, plus the new match field and other added fields
         fields = (
             'id', 'external_id', 'name', 'brand', 'description',
-            # 'top_notes', 'middle_notes', 'base_notes',
-            'top_notes_m2m', 'middle_notes_m2m', 'base_notes_m2m',
+            'top_notes', 'middle_notes', 'base_notes',
             'accords', 'occasions',
             'gender', 'season', 'best_for', 'year_released', 'country_origin',
             'pricePerML', 'thumbnailUrl', 'fullSizeUrl',

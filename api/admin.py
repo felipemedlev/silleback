@@ -46,7 +46,7 @@ class PerfumeAdmin(admin.ModelAdmin):
     list_display = ('name', 'brand', 'gender', 'pricePerML')
     search_fields = ('name', 'brand__name')
     list_filter = ('gender', 'brand')
-    filter_horizontal = ('accords', 'occasions', 'top_notes_m2m', 'middle_notes_m2m', 'base_notes_m2m')
+    filter_horizontal = ('accords', 'occasions', 'top_notes', 'middle_notes', 'base_notes')
 
 @admin.register(PredefinedBox)
 class PredefinedBoxAdmin(admin.ModelAdmin):
