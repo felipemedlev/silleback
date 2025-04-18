@@ -62,6 +62,25 @@ class PerfumeViewSet(viewsets.ReadOnlyModelViewSet):
     filterset_class = PerfumeFilter # Use the custom filterset class
     search_fields = ['name', 'description', 'brand__name'] # Fields for ?search=...
 
+    @action(detail=False, methods=['get'], url_path='by_external_ids')
+    def by_external_ids(self, request):
+        """
+        Retrieve a list of perfumes based on their external IDs.
+        Expects a comma-separated list of IDs in the 'external_ids' query parameter.
+        e.g., /api/perfumes/by_external_ids/?external_ids=id1,id2,id3
+        """
+        external_ids_str = request.query_params.get('external_ids', None)
+        if not external_ids_str:
+            return Response({"detail": "Missing 'external_ids' query parameter."}, status=status.HTTP_400_BAD_REQUEST)
+
+        external_ids_list = [pid.strip() for pid in external_ids_str.split(',') if pid.strip()]
+        if not external_ids_list:
+            return Response({"detail": "'external_ids' query parameter cannot be empty."}, status=status.HTTP_400_BAD_REQUEST)
+
+        queryset = self.get_queryset().filter(external_id__in=external_ids_list)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
 # --- Survey Questions API View ---
 from rest_framework import generics
 
@@ -106,28 +125,6 @@ class SurveyQuestionsView(generics.GenericAPIView):
 # Removed filterset_class from SurveyQuestionsView as it belongs in PerfumeViewSet
 
 # Note: User views (register, login, me, etc.) are handled by Djoser URLs
-    @action(detail=False, methods=['get'], url_path='by_external_ids')
-    def by_external_ids(self, request):
-        """
-        Retrieve a list of perfumes based on their external IDs.
-        Expects a comma-separated list of IDs in the 'external_ids' query parameter.
-        e.g., /api/perfumes/by_external_ids/?external_ids=id1,id2,id3
-        """
-        external_ids_str = request.query_params.get('external_ids', None)
-        if not external_ids_str:
-            return Response({"detail": "Missing 'external_ids' query parameter."}, status=status.HTTP_400_BAD_REQUEST)
-
-        external_ids_list = [pid.strip() for pid in external_ids_str.split(',') if pid.strip()]
-        if not external_ids_list:
-            return Response({"detail": "'external_ids' query parameter cannot be empty."}, status=status.HTTP_400_BAD_REQUEST)
-
-        queryset = self.get_queryset().filter(external_id__in=external_ids_list)
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
-
-
-
-
 
 class SurveyResponseSubmitView(generics.GenericAPIView):
     """
