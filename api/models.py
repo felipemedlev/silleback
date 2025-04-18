@@ -56,6 +56,16 @@ class Accord(models.Model):
     def __str__(self):
         return self.name
 
+class Note(models.Model):
+    """
+    Represents a perfume note (ingredient) that can be used in top, middle, or base notes.
+    """
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return self.name
+
 class Perfume(models.Model):
     # Choices definitions
     GENDER_CHOICES = [
@@ -83,9 +93,17 @@ class Perfume(models.Model):
 
     # Description & Composition
     description = models.TextField(blank=True, null=True)
-    top_notes = models.JSONField(default=list, blank=True, help_text='List of top note names')
-    middle_notes = models.JSONField(default=list, blank=True, help_text='List of middle note names')
-    base_notes = models.JSONField(default=list, blank=True, help_text='List of base note names')
+
+    # Original notes as JSONField
+    # top_notes = models.JSONField(default=list, blank=True, help_text='List of top note names')
+    # middle_notes = models.JSONField(default=list, blank=True, help_text='List of middle note names')
+    # base_notes = models.JSONField(default=list, blank=True, help_text='List of base note names')
+
+    # ManyToMany relationships for notes
+    top_notes_m2m = models.ManyToManyField(Note, blank=True, related_name='perfumes_as_top')
+    middle_notes_m2m = models.ManyToManyField(Note, blank=True, related_name='perfumes_as_middle')
+    base_notes_m2m = models.ManyToManyField(Note, blank=True, related_name='perfumes_as_base')
+
     accords = models.ManyToManyField(Accord, blank=True, related_name='perfumes')
 
     # Categorization & Usage

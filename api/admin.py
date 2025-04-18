@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from .models import (
-    User, Brand, Occasion, Accord, Perfume,
+    User, Brand, Occasion, Accord, Perfume, Note,
     PredefinedBox, SubscriptionTier, UserSubscription,
     Cart, CartItem, Order, OrderItem,
     Rating, Favorite, SurveyResponse, UserPerfumeMatch, SurveyQuestion
@@ -37,12 +37,16 @@ class OccasionAdmin(admin.ModelAdmin):
 class AccordAdmin(admin.ModelAdmin):
     search_fields = ('name',)
 
+@admin.register(Note)
+class NoteAdmin(admin.ModelAdmin):
+    search_fields = ('name',)
+
 @admin.register(Perfume)
 class PerfumeAdmin(admin.ModelAdmin):
     list_display = ('name', 'brand', 'gender', 'pricePerML')
     search_fields = ('name', 'brand__name')
     list_filter = ('gender', 'brand')
-    filter_horizontal = ('accords', 'occasions')
+    filter_horizontal = ('accords', 'occasions', 'top_notes_m2m', 'middle_notes_m2m', 'base_notes_m2m')
 
 @admin.register(PredefinedBox)
 class PredefinedBoxAdmin(admin.ModelAdmin):

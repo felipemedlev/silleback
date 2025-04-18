@@ -1,10 +1,10 @@
 from djoser.serializers import UserCreateSerializer as BaseUserCreateSerializer
 from djoser.serializers import UserSerializer as BaseUserSerializer
 from rest_framework import serializers
-from .models import ( # Add Cart, CartItem, PredefinedBox, SubscriptionTier, UserSubscription, Order, OrderItem, Rating, Favorite
+from .models import ( # Add Cart, CartItem, PredefinedBox, SubscriptionTier, UserSubscription, Order, OrderItem, Rating, Favorite, Note
     Brand, Occasion, Accord, Perfume, SurveyResponse, UserPerfumeMatch,
     Cart, CartItem, PredefinedBox, SubscriptionTier, UserSubscription,
-    Order, OrderItem, Rating, Favorite
+    Order, OrderItem, Rating, Favorite, Note
 )
 from django.contrib.auth import get_user_model
 
@@ -56,11 +56,20 @@ class AccordSerializer(serializers.ModelSerializer):
         model = Accord
         fields = '__all__'
 
+class NoteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Note
+        fields = '__all__'
+
 class PerfumeSerializer(serializers.ModelSerializer):
     # Use StringRelatedField for readable representation of related objects
     brand = serializers.StringRelatedField()
     occasions = serializers.StringRelatedField(many=True)
     accords = serializers.StringRelatedField(many=True)
+    # Add notes as string representations
+    top_notes_m2m = serializers.StringRelatedField(many=True)
+    middle_notes_m2m = serializers.StringRelatedField(many=True)
+    base_notes_m2m = serializers.StringRelatedField(many=True)
     # Add personalized match percentage field
     match_percentage = serializers.SerializerMethodField()
 
@@ -69,7 +78,8 @@ class PerfumeSerializer(serializers.ModelSerializer):
         # Include all relevant fields for the perfume catalog, plus the new match field and other added fields
         fields = (
             'id', 'external_id', 'name', 'brand', 'description',
-            'top_notes', 'middle_notes', 'base_notes',
+            # 'top_notes', 'middle_notes', 'base_notes',
+            'top_notes_m2m', 'middle_notes_m2m', 'base_notes_m2m',
             'accords', 'occasions',
             'gender', 'season', 'best_for', 'year_released', 'country_origin',
             'pricePerML', 'thumbnailUrl', 'fullSizeUrl',
