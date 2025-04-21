@@ -349,3 +349,21 @@ class FavoriteListSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 # --- End Rating & Favorite Serializers ---
+# --- Recommendation Serializer ---
+
+class UserPerfumeMatchSerializer(serializers.ModelSerializer):
+    """
+    Serializer for displaying user-perfume match scores, including perfume details.
+    Used for the /api/recommendations/ endpoint.
+    """
+    # Use the summary serializer for nested perfume representation
+    perfume = PerfumeSummarySerializer(read_only=True)
+    # Rename match_percentage for clarity in API response
+    score = serializers.DecimalField(source='match_percentage', max_digits=4, decimal_places=3, read_only=True)
+
+    class Meta:
+        model = UserPerfumeMatch
+        fields = ('perfume', 'score', 'last_updated')
+        read_only_fields = fields # This data is read-only via the API
+
+# --- End Recommendation Serializer ---

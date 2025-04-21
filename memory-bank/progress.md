@@ -42,3 +42,11 @@ This file tracks the project's progress using a task list format.
 
 
 * [2025-04-16 19:04] - Fixed issue where search filter (`?search=...`) was not applied to `/api/perfumes/` endpoint due to incorrect `search_fields` placement in `api/views.py`.
+
+[2025-04-21 17:48:00] - COMPLETED: Integration of standalone recommendation script into Django backend.
+    - Refactored script logic into `api/recommendations/predictor.py`.
+    - Created Celery task `api.tasks.update_user_recommendations` for background processing.
+    - Modified `api.views.SurveyResponseSubmitView` to trigger task via `delay_on_commit`.
+    - Added `api.views.RecommendationView` and `api.serializers.UserPerfumeMatchSerializer` for `GET /api/recommendations/` endpoint.
+    - Configured Celery app instance and added settings.
+    - Updated `requirements.txt`.

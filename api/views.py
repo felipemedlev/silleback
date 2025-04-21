@@ -21,6 +21,13 @@ from .serializers import ( # Add CartSerializer, CartItemSerializer, CartItemAdd
     RatingSerializer, FavoriteSerializer, FavoriteListSerializer
 )
 from decimal import Decimal, InvalidOperation # Import InvalidOperation
+import logging # Import logging
+
+# Import the Celery task
+from .tasks import update_user_recommendations
+
+# Setup logger
+logger = logging.getLogger(__name__)
 
 # Create your views here.
 
@@ -224,6 +231,11 @@ class SurveyResponseSubmitView(generics.GenericAPIView):
                 user=request.user,
                 defaults={'response_data': serializer.validated_data['response_data']}
             )
+
+            # Trigger recommendation update task after transaction commit
+            logger.info(f"Triggering recommendation update task for user {request.user.pk}")
+            update_user_recommendations.delay_on_commit(user_pk=request.user.pk)
+
             # Return the saved data with appropriate status code
             response_serializer = self.get_serializer(survey_response)
             status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
@@ -656,3 +668,37 @@ class FavoriteViewSet(mixins.ListModelMixin,
 
 
 # --- End Rating & Favorite Views ---
+
+# --- Recommendation View ---
+from rest_framework.pagination import PageNumberPagination
+from .serializers import UserPerfumeMatchSerializer # Import the new serializer
+
+class StandardResultsSetPagination(PageNumberPagination):
+    """ Standard pagination configuration. """
+    page_size = 20 # Number of items per page
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+class RecommendationView(generics.ListAPIView):
+    """
+    API endpoint to retrieve personalized perfume recommendations (match scores)
+    for the authenticated user. Results are pre-calculated and stored.
+    Supports pagination and ordering by score.
+    """
+    serializer_class = UserPerfumeMatchSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    pagination_class = StandardResultsSetPagination # Add pagination
+
+    def get_queryset(self):
+        """
+        Return a list of all perfume matches for the current user,
+        ordered by match percentage (descending).
+        Prefetch related perfume and brand for efficiency.
+        """
+        user = self.request.user
+        # Order by match_percentage descending to show best matches first
+        return UserPerfumeMatch.objects.filter(user=user)\
+                                       .select_related('perfume', 'perfume__brand')\
+                                       .order_by('-match_percentage')
+
+# --- End Recommendation View ---

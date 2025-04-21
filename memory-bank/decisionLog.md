@@ -69,3 +69,20 @@ This file records architectural and implementation decisions using a list format
 *   **Decision:** Corrected the placement of `search_fields` in `api/views.py`.
     *   **Rationale:** The `search_fields` attribute was incorrectly assigned to `SurveyQuestionsView` instead of `PerfumeViewSet`, preventing the `SearchFilter` from being applied correctly to the `/api/perfumes/` endpoint.
     *   **Implementation:** Moved `search_fields = [...]` from `SurveyQuestionsView` definition to `PerfumeViewSet` definition.
+
+---
+[2025-04-21 17:50:30] - **Decision:** Integrate recommendation logic using Celery for background processing.
+    - **Rationale:** Calculating scores for all perfumes per user can be time-consuming. Background processing prevents blocking the user request during survey submission.
+    - **Implications:** Requires Celery setup (broker like Redis), task definition, and triggering mechanism.
+
+[2025-04-21 17:50:30] - **Decision:** Trigger Celery task using `delay_on_commit` after `SurveyResponse` save.
+    - **Rationale:** Ensures the database transaction for saving the survey is complete before the task attempts to read the data, preventing race conditions. Confirmed via Celery documentation.
+    - **Implications:** Task is triggered slightly later, but data consistency is prioritized. Task ID is not immediately available to the caller.
+
+[2025-04-21 17:50:30] - **Decision:** Store calculated scores in `UserPerfumeMatch` table.
+    - **Rationale:** Provides a dedicated table for storing the output, allowing efficient retrieval via a separate API endpoint. Avoids recalculating scores on every request.
+    - **Implications:** Requires efficient bulk update/create logic within the Celery task.
+
+[2025-04-21 17:50:30] - **Decision:** Create a dedicated `GET /api/recommendations/` endpoint.
+    - **Rationale:** Provides a clean interface for the frontend to fetch pre-calculated recommendations for the authenticated user.
+    - **Implications:** Requires a new view (`RecommendationView`) and serializer (`UserPerfumeMatchSerializer`).

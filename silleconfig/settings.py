@@ -195,3 +195,33 @@ DJOSER = {
         'password_reset': 'djoser.email.PasswordResetEmail',
     }
 }
+
+# --- Celery Configuration ---
+# Using Redis as the broker for local development/testing
+# Ensure Redis server is running (e.g., `redis-server` or via Docker)
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+
+# We don't strictly need a result backend for this specific task,
+# as results are stored in UserPerfumeMatch.
+# If you want general task tracking (e.g., in Django admin via django-celery-results),
+# configure it here:
+# CELERY_RESULT_BACKEND = 'django-db' # Requires django-celery-results setup
+# CELERY_CACHE_BACKEND = 'default' # If using django-cache backend
+
+# Use JSON for serialization
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+
+# Set timezone (optional, defaults to Django's TIME_ZONE if USE_TZ=True)
+# CELERY_TIMEZONE = TIME_ZONE # Use Django's timezone
+
+# Optional: Track task starting state
+CELERY_TASK_TRACK_STARTED = True
+
+# Optional: Set a time limit for tasks (e.g., 5 minutes)
+CELERY_TASK_TIME_LIMIT = 500 # seconds
+
+# Custom setting for recommendation alpha value
+CELERY_RECOMMENDATION_ALPHA = float(os.environ.get('CELERY_RECOMMENDATION_ALPHA', 1.5))
+# --- End Celery Configuration ---

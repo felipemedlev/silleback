@@ -24,6 +24,8 @@ urlpatterns = [
     path('survey/questions/<int:question_id>/', views.SurveyQuestionsView.as_view(), name='survey-questions-detail'),
     # Add path for perfume rating view (GET/POST)
     path('perfumes/<int:perfume_id>/rating/', views.PerfumeRatingView.as_view(), name='perfume-rating'),
+    # Add path for retrieving user recommendations
+    path('recommendations/', views.RecommendationView.as_view(), name='user-recommendations'),
 
     # If you need browsable API login/logout views (optional, requires rest_framework urls)
     # path('api-auth/', include('rest_framework.urls', namespace='rest_framework'))
