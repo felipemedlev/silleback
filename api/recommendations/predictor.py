@@ -5,6 +5,7 @@ from decimal import Decimal
 
 # Django imports (assuming this file is within the Django project structure)
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AbstractUser
 from ..models import Perfume, SurveyResponse, SurveyQuestion, Accord, UserPerfumeMatch
 
 # Setup logger
@@ -37,7 +38,7 @@ def _get_ordered_accord_list():
         logger.error(f"Error fetching ordered accord list: {e}", exc_info=True)
         return []
 
-def _get_user_survey_vector_and_gender(user: User, ordered_accords: list):
+def _get_user_survey_vector_and_gender(user: AbstractUser, ordered_accords: list):
     """
     Fetches the user's survey response, extracts gender preference,
     and creates the survey vector aligned with the ordered_accords list.
@@ -59,15 +60,19 @@ def _get_user_survey_vector_and_gender(user: User, ordered_accords: list):
         for i, accord_name in enumerate(ordered_accords):
             # Use .get(accord_name, 0) to handle missing accords in response, default to 0 rating
             rating = response_data.get(accord_name, 0)
-            # Validate rating (assuming 0-4 scale)
+            # Validate rating (0-5 scale, -1 for 'I don't know') and map to centered scale (-2.5 to +2.5)
             try:
                 rating_float = float(rating)
-                if 0 <= rating_float <= 4:
-                    user_survey_vector[i] = rating_float
+                if rating_float == -1: # "I don't know" maps to neutral 0
+                    user_survey_vector[i] = 0.0
+                elif 0 <= rating_float <= 5: # Map 0-5 to -2.5 to +2.5
+                    user_survey_vector[i] = rating_float - 2.5
                 else:
-                    logger.warning(f"Invalid rating '{rating}' for accord '{accord_name}' for user {user.pk}. Using 0.")
+                    logger.warning(f"Invalid rating '{rating}' (expected 0-5 or -1) for accord '{accord_name}' for user {user.pk}. Using neutral 0.")
+                    user_survey_vector[i] = 0.0 # Default invalid ratings to neutral 0
             except (ValueError, TypeError):
-                 logger.warning(f"Non-numeric rating '{rating}' for accord '{accord_name}' for user {user.pk}. Using 0.")
+                 logger.warning(f"Non-numeric rating '{rating}' for accord '{accord_name}' for user {user.pk}. Using neutral 0.")
+                 user_survey_vector[i] = 0.0 # Default non-numeric ratings to neutral 0
 
         logger.info(f"Generated survey vector for user {user.pk}. Gender: {user_gender}")
         return user_survey_vector, user_gender
@@ -148,8 +153,7 @@ def _get_perfume_accord_data(ordered_accords: list):
 
 
 # --- Core Recommendation Logic ---
-
-def generate_recommendations(user: User, alpha: float = 1.5):
+def generate_recommendations(user: AbstractUser, alpha: float = 0.5):
     """
     Generates perfume recommendations for a given user based on their survey response.
 
@@ -233,7 +237,9 @@ def generate_recommendations(user: User, alpha: float = 1.5):
     # Apply boosting formula (log scale)
     # Use Decimal for alpha to avoid potential float precision issues if needed, though likely fine here
     rating_count_boost = np.log1p(np.maximum(0, candidate_perfumes_df['popularity'].values))
-    candidate_perfumes_df['boosted_score'] = candidate_perfumes_df['similarity_score'] + (Decimal(str(alpha)) * rating_count_boost)
+    # Convert Decimal to float before multiplying with numpy array, then convert back for consistency
+    alpha_float = float(alpha)
+    candidate_perfumes_df['boosted_score'] = candidate_perfumes_df['similarity_score'] + (alpha_float * rating_count_boost)
 
     # 7. Normalize Boosted Score to 0-1 range
     logger.info("Normalizing scores...")

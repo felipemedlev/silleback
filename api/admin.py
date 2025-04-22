@@ -1,5 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.urls import reverse
+from django.utils.html import format_html
 from .models import (
     User, Brand, Occasion, Accord, Perfume, Note,
     PredefinedBox, SubscriptionTier, UserSubscription,
@@ -9,7 +11,7 @@ from .models import (
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
-    list_display = ('email', 'username', 'phone', 'address', 'is_active', 'is_staff', 'date_joined')
+    list_display = ('email', 'username', 'phone', 'address', 'is_active', 'is_staff', 'date_joined', 'view_matches_link') # Added link
 
     fieldsets = BaseUserAdmin.fieldsets + (
         ('Additional Info', {
@@ -24,6 +26,23 @@ class UserAdmin(BaseUserAdmin):
     )
     search_fields = ('email', 'username')
     ordering = ('email',)
+
+    def view_matches_link(self, obj):
+        """
+        Generates a link to the filtered UserPerfumeMatch admin page for this user.
+        """
+        count = UserPerfumeMatch.objects.filter(user=obj).count()
+        if count == 0:
+            return "No matches"
+
+        url = (
+            reverse("admin:api_userperfumematch_changelist")
+            + f"?user__id__exact={obj.pk}"
+        )
+        return format_html('<a href="{}">View {} Matches</a>', url, count)
+
+    view_matches_link.short_description = "Perfume Matches"
+
 
 @admin.register(Brand)
 class BrandAdmin(admin.ModelAdmin):
