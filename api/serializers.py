@@ -140,7 +140,7 @@ class PerfumeSummarySerializer(serializers.ModelSerializer):
     brand = serializers.StringRelatedField()
     class Meta:
         model = Perfume
-        fields = ('id', 'name', 'brand', 'thumbnailUrl', 'pricePerML') # Key info for cart display
+        fields = ('id', 'name', 'brand', 'thumbnailUrl', 'pricePerML', 'external_id') # Added external_id for consistency
 
 class CartItemSerializer(serializers.ModelSerializer):
     """ Serializer for displaying items within a cart. """

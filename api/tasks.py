@@ -91,12 +91,14 @@ def update_user_recommendations(self, user_pk: int):
                 updated_count = UserPerfumeMatch.objects.bulk_update(matches_to_update, ['match_percentage'], batch_size=500)
                 logger.info(f"Bulk updated {updated_count} existing UserPerfumeMatch entries.")
 
-            # Optional: Delete matches for perfumes no longer recommended (if applicable)
-            # current_recommended_ids = set(perfume_scores.keys())
-            # matches_to_delete = existing_matches_set - current_recommended_ids
-            # if matches_to_delete:
-            #     deleted_count, _ = UserPerfumeMatch.objects.filter(user=user, perfume_id__in=matches_to_delete).delete()
-            #     logger.info(f"Deleted {deleted_count} outdated UserPerfumeMatch entries.")
+            # Delete matches for perfumes no longer recommended (especially when gender changes)
+            # IMPORTANT: This block is critical for handling gender preference changes
+            # It ensures old matches for perfumes that don't match the user's gender are removed
+            current_recommended_ids = set(perfume_scores.keys())
+            matches_to_delete = existing_matches_set - current_recommended_ids
+            if matches_to_delete:
+                deleted_count, _ = UserPerfumeMatch.objects.filter(user=user, perfume_id__in=matches_to_delete).delete()
+                logger.info(f"Deleted {deleted_count} outdated UserPerfumeMatch entries.")
 
 
         logger.info(f"Successfully updated recommendations for user {user_pk}")

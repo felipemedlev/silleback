@@ -234,6 +234,39 @@ class SurveyResponseSubmitView(generics.GenericAPIView):
 
             # Trigger recommendation update task after transaction commit
             logger.info(f"Triggering recommendation update task for user {request.user.pk}")
+
+            # Check if gender preference has changed in the survey
+            gender_preference = serializer.validated_data['response_data'].get('gender', '').lower()
+
+            # If gender has changed, manually delete all matches with incompatible gender
+            # This ensures no lingering matches from previous gender even if the Celery task fails
+            if gender_preference and gender_preference in ['male', 'female', 'unisex']:
+                with transaction.atomic():
+                    # For male preference: delete female-only perfumes
+                    if gender_preference == 'male':
+                        UserPerfumeMatch.objects.filter(
+                            user=request.user,
+                            perfume__gender='female'  # Delete female-only perfumes
+                        ).delete()
+                        logger.info(f"Deleted female-only perfume matches for male user {request.user.pk}")
+
+                    # For female preference: delete male-only perfumes
+                    elif gender_preference == 'female':
+                        UserPerfumeMatch.objects.filter(
+                            user=request.user,
+                            perfume__gender='male'  # Delete male-only perfumes
+                        ).delete()
+                        logger.info(f"Deleted male-only perfume matches for female user {request.user.pk}")
+
+                    # For unisex preference: delete both male-only and female-only perfumes
+                    elif gender_preference == 'unisex':
+                        UserPerfumeMatch.objects.filter(
+                            user=request.user,
+                            perfume__gender__in=['male', 'female']  # Delete gender-specific perfumes
+                        ).delete()
+                        logger.info(f"Deleted gender-specific perfume matches for unisex user {request.user.pk}")
+
+            # Now trigger the full recommendation update
             update_user_recommendations.delay_on_commit(user_pk=request.user.pk)
 
             # Return the saved data with appropriate status code

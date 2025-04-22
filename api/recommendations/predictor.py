@@ -13,35 +13,34 @@ logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
-# --- Placeholder Database Interaction Functions ---
+# --- Database Interaction Functions ---
 
-def _get_ordered_accord_list():
+def _get_all_accord_list():
     """
-    Fetches the active accord names from SurveyQuestions in a consistent order.
-    This defines the columns/dimensions of the dynamic accord matrix.
+    Fetches ALL distinct accord names associated with any Perfume, in a consistent order (by name).
+    This defines the columns/dimensions of the full accord matrix.
     """
-    # Example implementation (adjust based on actual SurveyQuestion usage)
     try:
-        active_accord_questions = SurveyQuestion.objects.filter(
-            is_active=True,
-            question_type='accord'
-        ).select_related('accord').order_by('order') # Order is important!
+        # Fetch distinct accord names linked to perfumes, ordered by name for consistency
+        all_accords = list(Accord.objects.filter(perfumes__isnull=False).distinct().order_by('name').values_list('name', flat=True))
+        # Convert to lowercase for consistency
+        all_accords_lower = [name.lower() for name in all_accords if name]
 
-        if not active_accord_questions.exists():
-            logger.warning("No active accord survey questions found. Cannot generate recommendations.")
+        if not all_accords_lower:
+            logger.warning("No accords found associated with any perfumes in the database.")
             return []
 
-        ordered_accords = [q.accord.name.lower() for q in active_accord_questions if q.accord]
-        logger.info(f"Fetched {len(ordered_accords)} ordered accord names from SurveyQuestions.")
-        return ordered_accords
+        logger.info(f"Fetched {len(all_accords_lower)} distinct accord names associated with perfumes.")
+        return all_accords_lower
     except Exception as e:
-        logger.error(f"Error fetching ordered accord list: {e}", exc_info=True)
+        logger.error(f"Error fetching full accord list: {e}", exc_info=True)
         return []
 
-def _get_user_survey_vector_and_gender(user: AbstractUser, ordered_accords: list):
+def _get_user_survey_vector_and_gender(user: AbstractUser, all_accords: list):
     """
     Fetches the user's survey response, extracts gender preference,
-    and creates the survey vector aligned with the ordered_accords list.
+    and creates the survey vector aligned with the *all_accords* list.
+    Assigns neutral preference (0.0) for non-surveyed accords.
     """
     try:
         survey_response = SurveyResponse.objects.get(user=user)
@@ -51,30 +50,37 @@ def _get_user_survey_vector_and_gender(user: AbstractUser, ordered_accords: list
         user_gender = response_data.get('gender', '').lower()
         if not user_gender:
             logger.warning(f"Gender preference not found in survey response for user {user.pk}.")
-            # Decide fallback behavior: maybe default to 'unisex' or raise error?
-            # For now, let's return None for gender if not found.
-            user_gender = None
+            user_gender = None # Or default to 'unisex'? For now, None.
 
-        # Create survey vector
-        user_survey_vector = np.zeros(len(ordered_accords))
-        for i, accord_name in enumerate(ordered_accords):
-            # Use .get(accord_name, 0) to handle missing accords in response, default to 0 rating
-            rating = response_data.get(accord_name, 0)
-            # Validate rating (0-5 scale, -1 for 'I don't know') and map to centered scale (-2.5 to +2.5)
-            try:
-                rating_float = float(rating)
-                if rating_float == -1: # "I don't know" maps to neutral 0
-                    user_survey_vector[i] = 0.0
-                elif 0 <= rating_float <= 5: # Map 0-5 to -2.5 to +2.5
-                    user_survey_vector[i] = rating_float - 2.5
-                else:
-                    logger.warning(f"Invalid rating '{rating}' (expected 0-5 or -1) for accord '{accord_name}' for user {user.pk}. Using neutral 0.")
-                    user_survey_vector[i] = 0.0 # Default invalid ratings to neutral 0
-            except (ValueError, TypeError):
-                 logger.warning(f"Non-numeric rating '{rating}' for accord '{accord_name}' for user {user.pk}. Using neutral 0.")
-                 user_survey_vector[i] = 0.0 # Default non-numeric ratings to neutral 0
+        # Get the set of accords the user actually rated in the survey
+        # This assumes survey response keys match accord names (lowercase)
+        surveyed_accords_set = {key.lower() for key in response_data.keys() if key.lower() in all_accords}
+        logger.info(f"User {user.pk} rated {len(surveyed_accords_set)} accords in their survey.")
 
-        logger.info(f"Generated survey vector for user {user.pk}. Gender: {user_gender}")
+        # Create survey vector aligned with all_accords
+        user_survey_vector = np.zeros(len(all_accords))
+        for i, accord_name in enumerate(all_accords):
+            if accord_name in surveyed_accords_set:
+                # Accord was surveyed, use the user's rating
+                rating = response_data.get(accord_name, 0) # Use .get for safety, though it should be present
+                try:
+                    rating_float = float(rating)
+                    if rating_float == -1: # "I don't know" maps to neutral 0
+                        user_survey_vector[i] = 0.0
+                    elif 0 <= rating_float <= 5: # Map 0-5 to -2.5 to +2.5
+                        user_survey_vector[i] = rating_float - 2.5
+                    else:
+                        logger.warning(f"Invalid rating '{rating}' for surveyed accord '{accord_name}' for user {user.pk}. Using neutral 0.")
+                        user_survey_vector[i] = 0.0
+                except (ValueError, TypeError):
+                     logger.warning(f"Non-numeric rating '{rating}' for surveyed accord '{accord_name}' for user {user.pk}. Using neutral 0.")
+                     user_survey_vector[i] = 0.0
+            else:
+                # Accord exists in perfumes but was not surveyed by this user
+                # Assign neutral preference (0.0 on the centered scale)
+                user_survey_vector[i] = 0.0
+
+        logger.info(f"Generated survey vector (size {len(all_accords)}) for user {user.pk}. Gender: {user_gender}")
         return user_survey_vector, user_gender
 
     except SurveyResponse.DoesNotExist:
@@ -85,77 +91,80 @@ def _get_user_survey_vector_and_gender(user: AbstractUser, ordered_accords: list
         return None, None
 
 
-def _get_perfume_accord_data(ordered_accords: list):
+def _get_perfume_accord_data(all_accords: list):
     """
-    Fetches perfume data including IDs, gender, popularity, and their accords.
-    Creates a DataFrame and a dynamic perfume-accord matrix (binary).
+    Fetches perfume data including IDs, gender, popularity, and their *ordered* accords.
+    Creates a DataFrame and a *weighted* perfume-accord matrix based on accord order/predominance.
+    Uses the full list of `all_accords` for the matrix columns.
     """
     try:
-        # Fetch all perfumes with necessary fields, prefetching accords
-        perfumes_qs = Perfume.objects.prefetch_related('accords').values(
-            'id',
-            'external_id', # Keep external_id if needed for mapping or reference
-            'name',
-            'gender',
-            'popularity',
-            'accords__name' # Get the names of related accords
-        )
+        # Fetch all perfumes with necessary fields.
+        # Prefetch related accords. IMPORTANT: Assumes the default ordering
+        # of the related 'accords' reflects their predominance. If an explicit
+        # 'order' field exists on the through model (e.g., PerfumeAccord),
+        # it should be used in an .order_by() clause on the prefetch.
+        perfumes = Perfume.objects.prefetch_related('accords').all()
 
-        if not perfumes_qs:
+        if not perfumes:
             logger.warning("No perfumes found in the database.")
-            return pd.DataFrame(), pd.DataFrame() # Return empty DataFrames
+            return pd.DataFrame(), pd.DataFrame()
 
-        # Convert queryset to DataFrame - might need optimization for large datasets
-        # Using list comprehension for potentially better performance than direct values()
         perfume_data = []
-        perfume_accords_map = {} # {perfume_id: set(accord_names)}
+        # Store accords as an ordered list: {perfume_id: [ordered_accord_names]}
+        perfume_accords_map = {}
 
-        # Process queryset efficiently
-        for p in perfumes_qs:
-            pid = p['id']
-            if pid not in perfume_accords_map:
-                 perfume_accords_map[pid] = set()
-                 # Store main perfume data only once per perfume
-                 perfume_data.append({
-                     'perfume_id': pid,
-                     'external_id': p['external_id'],
-                     'name': p['name'],
-                     'gender': str(p['gender']).lower() if p['gender'] else 'unisex', # Handle None gender
-                     'popularity': p['popularity'] if p['popularity'] is not None else 0, # Handle None popularity
-                 })
-            if p['accords__name']:
-                perfume_accords_map[pid].add(p['accords__name'].lower())
+        for p in perfumes:
+            perfume_data.append({
+                'perfume_id': p.id,
+                'external_id': p.external_id,
+                'name': p.name,
+                'gender': str(p.gender).lower() if p.gender else 'unisex',
+                'popularity': p.popularity if p.popularity is not None else 0,
+            })
+            # Retrieve accords in the order provided by the ORM/prefetch
+            ordered_perfume_accords = [a.name.lower() for a in p.accords.all() if a.name]
+            perfume_accords_map[p.id] = ordered_perfume_accords
 
         perfumes_df = pd.DataFrame(perfume_data)
         if perfumes_df.empty:
-             logger.warning("Perfume DataFrame is empty after processing queryset.")
-             return pd.DataFrame(), pd.DataFrame()
+            logger.warning("Perfume DataFrame is empty after processing queryset.")
+            return pd.DataFrame(), pd.DataFrame()
 
         perfumes_df.set_index('perfume_id', inplace=True)
 
-        # Create the dynamic perfume-accord matrix (binary: 1 if accord present, 0 otherwise)
-        # Initialize with zeros
-        accord_matrix_df = pd.DataFrame(0, index=perfumes_df.index, columns=ordered_accords)
+        # Create the full perfume-accord matrix (weighted by order)
+        # Initialize with zeros, using all_accords as columns
+        accord_matrix_df = pd.DataFrame(0.0, index=perfumes_df.index, columns=all_accords) # Use float for weights
 
-        # Populate the matrix
-        for perfume_id, accord_set in perfume_accords_map.items():
-            if perfume_id in accord_matrix_df.index: # Check if perfume_id exists in index
-                for accord_name in accord_set:
-                    if accord_name in accord_matrix_df.columns: # Check if accord_name exists as column
-                        accord_matrix_df.loc[perfume_id, accord_name] = 1
+        # Populate the matrix with weights
+        for perfume_id, ordered_perfume_accords in perfume_accords_map.items():
+            if perfume_id in accord_matrix_df.index:
+                for idx, accord_name in enumerate(ordered_perfume_accords):
+                    if accord_name in accord_matrix_df.columns:
+                        # Apply weighting scheme: 1.0, 0.8, 0.6, 0.4, 0.2, then 0.1 for subsequent
+                        # Limit index to avoid negative weights if many accords
+                        weight_index = min(idx, 5) # 0, 1, 2, 3, 4 map to 1.0->0.2, 5+ maps to 0.1
+                        if weight_index < 5:
+                             weight = 1.0 - (0.2 * weight_index)
+                        else:
+                             weight = 0.1
+                        # Assign the calculated weight
+                        accord_matrix_df.loc[perfume_id, accord_name] = weight
+                    # else: accord exists for perfume but not in the global 'all_accords' list (shouldn't happen with current logic)
 
-        logger.info(f"Created perfume DataFrame ({len(perfumes_df)} perfumes) and accord matrix ({accord_matrix_df.shape}).")
+        logger.info(f"Created perfume DataFrame ({len(perfumes_df)} perfumes) and weighted accord matrix ({accord_matrix_df.shape}).")
         return perfumes_df, accord_matrix_df
 
     except Exception as e:
-        logger.error(f"Error fetching perfume/accord data: {e}", exc_info=True)
-        return pd.DataFrame(), pd.DataFrame() # Return empty DataFrames on error
+        logger.error(f"Error fetching weighted perfume/accord data: {e}", exc_info=True)
+        return pd.DataFrame(), pd.DataFrame()
 
 
 # --- Core Recommendation Logic ---
 def generate_recommendations(user: AbstractUser, alpha: float = 0.5):
     """
-    Generates perfume recommendations for a given user based on their survey response.
+    Generates perfume recommendations for a given user based on their survey response,
+    using a weighted accord matrix reflecting predominance and popularity boosting.
 
     Args:
         user: The Django User object.
@@ -167,23 +176,23 @@ def generate_recommendations(user: AbstractUser, alpha: float = 0.5):
     """
     logger.info(f"Starting recommendation generation for user {user.pk} (alpha={alpha}).")
 
-    # 1. Get the consistent list of accords
-    ordered_accords = _get_ordered_accord_list()
-    if not ordered_accords:
+    # 1. Get the full list of all accords present in perfumes
+    all_accords = _get_all_accord_list()
+    if not all_accords:
+        logger.error("Failed to retrieve the list of all accords. Cannot generate recommendations.")
         return None # Error logged in helper
 
-    # 2. Get user's survey vector and gender preference
-    user_survey_vector, user_gender = _get_user_survey_vector_and_gender(user, ordered_accords)
+    # 2. Get user's survey vector (aligned with all accords) and gender preference
+    user_survey_vector, user_gender = _get_user_survey_vector_and_gender(user, all_accords)
     if user_survey_vector is None or user_gender is None:
         # Error logged in helper, or user has no survey/gender pref
-        # Handle case where gender is missing but vector exists? For now, require both.
         logger.warning(f"Could not retrieve survey vector or gender for user {user.pk}.")
         return None
 
-    # 3. Get perfume data and the dynamic accord matrix
-    perfumes_df, accord_matrix_df = _get_perfume_accord_data(ordered_accords)
+    # 3. Get perfume data and the full *weighted* accord matrix
+    perfumes_df, accord_matrix_df = _get_perfume_accord_data(all_accords)
     if perfumes_df.empty or accord_matrix_df.empty:
-        logger.warning("Perfume data or accord matrix is empty. Cannot generate recommendations.")
+        logger.warning("Perfume data or the weighted accord matrix is empty. Cannot generate recommendations.")
         return None # Error logged in helper
 
     # 4. Filter Perfumes by Gender
