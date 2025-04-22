@@ -3,14 +3,13 @@ from .models import Perfume
 
 class PerfumeFilter(FilterSet): # Use imported FilterSet
     # Define filters for fields not handled by default or needing specific lookups
-    # pricePerML = django_filters.RangeFilter() # Replaced with explicit min/max filters below
     price_min = NumberFilter(field_name='pricePerML', lookup_expr='gte') # Use imported NumberFilter
     price_max = NumberFilter(field_name='pricePerML', lookup_expr='lte') # Use imported NumberFilter
     season = CharFilter(field_name='season', lookup_expr='iexact') # Use imported CharFilter
     best_for = CharFilter(field_name='best_for', lookup_expr='iexact') # Use imported CharFilter
 
     # Add filters for existing fields if needed for consistency or specific lookups
-    # gender = CharFilter(field_name='gender', lookup_expr='iexact') # Example if needed explicitly
+    gender = CharFilter(field_name='gender', lookup_expr='iexact') # Example if needed explicitly
     brand = Filter(method='filter_brand', label='Brand IDs (comma-separated)') # Use base Filter
     occasions = CharFilter(method='filter_occasions', label='Occasion IDs (comma-separated)')
 
@@ -40,12 +39,10 @@ class PerfumeFilter(FilterSet): # Use imported FilterSet
     class Meta:
         model = Perfume
         fields = [
-            'gender',       # Keep existing filter
-# Removed 'brand' and 'occasions' as they are now explicitly defined above
-            'accords',      # Keep existing filter (will filter by ID)
-            'season',       # Add season filter
-            'best_for',     # Add best_for filter
-            # 'pricePerML', # Removed, using price_min and price_max instead
+            'gender',
+            'accords',
+            'season',
+            'best_for',
             'price_min',
             'price_max',
         ]

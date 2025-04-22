@@ -10,16 +10,12 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 class User(AbstractUser):
     # Fields from AbstractUser: username, first_name, last_name, email, password,
     # groups, user_permissions, is_staff, is_active, is_superuser, last_login, date_joined
-
     # Use email as the primary identifier instead of username
     USERNAME_FIELD = 'email'
     # 'username' is still required by default for createsuperuser command
     # if it's part of the model. We keep it here but make it optional for regular use.
     REQUIRED_FIELDS = []
-
-    # Ensure email is unique and stored
     email = models.EmailField(unique=True, blank=False, null=False) # Make email explicitly required
-
     # Make username optional and not unique for regular users
     username = models.CharField(
         max_length=150,
@@ -27,15 +23,11 @@ class User(AbstractUser):
         blank=True,
         null=True
     )
-
     # Add custom fields
     phone = models.CharField(max_length=20, blank=True, null=True)
     address = models.TextField(blank=True, null=True)
-
     def __str__(self):
         return self.email
-
-
 
 class Brand(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -82,6 +74,7 @@ class Perfume(models.Model):
     BEST_FOR_CHOICES = [
         ('day', 'Day'),
         ('night', 'Night'),
+        ('both', 'Day and Night'),
     ]
 
     # Core Info
@@ -200,9 +193,6 @@ class SurveyQuestion(models.Model):
         if self.question_type != 'gender' and self.options:
              raise ValidationError("Options should only be defined for question_type 'gender'.")
 
-
-
-
 class Cart(models.Model):
     """
     Represents a user's shopping cart.
@@ -259,8 +249,6 @@ class CartItem(models.Model):
         if self.product_type == 'box' and self.perfume:
             raise ValidationError("Perfume should not be set for product_type 'box'.")
 
-
-
 class PredefinedBox(models.Model):
     """
     Represents a curated box with a fixed set of perfumes.
@@ -283,7 +271,6 @@ class PredefinedBox(models.Model):
 
 
 # --- Subscription Models ---
-
 class SubscriptionTier(models.Model):
     """
     Represents different subscription levels offered.
@@ -317,11 +304,7 @@ class UserSubscription(models.Model):
         status = "Active" if self.is_active else "Inactive"
         return f"{self.user.email} - {tier_name} ({status})"
 
-# --- End Subscription Models ---
-
-
 # --- Order Models ---
-
 class Order(models.Model):
     """
     Represents a customer order.
@@ -373,11 +356,6 @@ class OrderItem(models.Model):
         item_desc = self.item_name if self.item_name else f"Item {self.id}"
         return f"{self.quantity} x {item_desc} in Order {self.order.id}"
 
-# --- End Order Models ---
-
-
-# --- Rating & Favorite Models ---
-
 class Rating(models.Model):
     """
     Represents a user's rating for a specific perfume.
@@ -417,5 +395,3 @@ class Favorite(models.Model):
 
     def __str__(self):
         return f"{self.user.email} favorited {self.perfume.name}"
-
-# --- End Rating & Favorite Models ---

@@ -39,8 +39,6 @@ class UserSerializer(BaseUserSerializer):
         # Prevent changing email via this serializer easily after creation
         read_only_fields = ('email', 'date_joined', 'is_active', 'is_staff')
 
-
-
 class BrandSerializer(serializers.ModelSerializer):
     class Meta:
         model = Brand
@@ -72,6 +70,7 @@ class PerfumeSerializer(serializers.ModelSerializer):
     base_notes = serializers.StringRelatedField(many=True)
     # Add personalized match percentage field
     match_percentage = serializers.SerializerMethodField()
+    best_for = serializers.SerializerMethodField() # Add SerializerMethodField for best_for
 
     class Meta:
         model = Perfume
@@ -80,7 +79,7 @@ class PerfumeSerializer(serializers.ModelSerializer):
             'id', 'external_id', 'name', 'brand', 'description',
             'top_notes', 'middle_notes', 'base_notes',
             'accords', 'occasions',
-            'gender', 'season', 'best_for', 'year_released', 'country_origin',
+            'gender', 'season', 'best_for', 'year_released', 'country_origin', # Keep original best_for in fields for now, will be handled by get_best_for
             'pricePerML', 'thumbnailUrl', 'fullSizeUrl',
             'overall_rating', 'rating_count', 'longevity_rating', 'sillage_rating', 'price_value_rating',
             'popularity',
@@ -102,6 +101,14 @@ class PerfumeSerializer(serializers.ModelSerializer):
             except UserPerfumeMatch.DoesNotExist:
                 return None
         return None
+
+    def get_best_for(self, obj):
+        """
+        Returns 'both' if best_for is null or empty, otherwise returns the original value.
+        """
+        if obj.best_for is None or obj.best_for == '':
+            return 'both'
+        return obj.best_for
 
 
 class SurveyResponseSerializer(serializers.ModelSerializer):
