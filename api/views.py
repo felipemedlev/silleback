@@ -5,7 +5,7 @@ from rest_framework.decorators import action # Import action decorator
 from django.shortcuts import get_object_or_404 # Import get_object_or_404
 from rest_framework import filters as drf_filters
 from django_filters.rest_framework import DjangoFilterBackend
-from .filters import PerfumeFilter # Import the custom filterset
+from .filters import PerfumeFilter, UserPerfumeMatchFilter # Import the custom filtersets
 from django.db import transaction # Import transaction
 # Q object import removed as it's no longer used in this view
 from .models import ( # Add Cart, CartItem, PredefinedBox, SubscriptionTier, UserSubscription, Order, OrderItem, Rating, Favorite
@@ -671,6 +671,8 @@ class RecommendationView(generics.ListAPIView):
     serializer_class = UserPerfumeMatchSerializer
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = StandardResultsSetPagination # Add pagination
+    filter_backends = [DjangoFilterBackend, drf_filters.OrderingFilter] # Add DjangoFilterBackend and OrderingFilter
+    filterset_class = UserPerfumeMatchFilter # Use the correct filterset for UserPerfumeMatch
 
     def get_queryset(self):
         """

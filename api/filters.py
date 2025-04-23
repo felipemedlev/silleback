@@ -1,17 +1,19 @@
-from django_filters import FilterSet, NumberFilter, CharFilter, BaseInFilter, Filter
-from .models import Perfume
+import django_filters # Use import django_filters instead of specific imports for clarity
+from .models import Perfume, UserPerfumeMatch # Import UserPerfumeMatch
 
-class PerfumeFilter(FilterSet): # Use imported FilterSet
+class PerfumeFilter(django_filters.FilterSet):
     # Define filters for fields not handled by default or needing specific lookups
-    price_min = NumberFilter(field_name='pricePerML', lookup_expr='gte') # Use imported NumberFilter
-    price_max = NumberFilter(field_name='pricePerML', lookup_expr='lte') # Use imported NumberFilter
-    season = CharFilter(field_name='season', lookup_expr='iexact') # Use imported CharFilter
-    best_for = CharFilter(field_name='best_for', lookup_expr='iexact') # Use imported CharFilter
+    price_min = django_filters.NumberFilter(field_name='pricePerML', lookup_expr='gte') # Corrected field name
+    price_max = django_filters.NumberFilter(field_name='pricePerML', lookup_expr='lte') # Corrected field name
+    season = django_filters.CharFilter(field_name='season', lookup_expr='iexact')
+    best_for = django_filters.CharFilter(field_name='best_for', lookup_expr='iexact')
 
     # Add filters for existing fields if needed for consistency or specific lookups
-    gender = CharFilter(field_name='gender', lookup_expr='iexact') # Example if needed explicitly
-    brand = Filter(method='filter_brand', label='Brand IDs (comma-separated)') # Use base Filter
-    occasions = CharFilter(method='filter_occasions', label='Occasion IDs (comma-separated)')
+    gender = django_filters.CharFilter(field_name='gender', lookup_expr='iexact')
+    brand = django_filters.CharFilter(method='filter_brand', label='Brand IDs (comma-separated)') # Use CharFilter for comma-separated values
+    occasions = django_filters.CharFilter(method='filter_occasions', label='Occasion IDs (comma-separated)')
+    # Add filter for external_id (comma-separated)
+    external_ids = django_filters.CharFilter(method='filter_external_ids', label='External IDs (comma-separated)')
 
     def filter_brand(self, queryset, name, value):
         """ Custom filter for comma-separated brand IDs """
@@ -36,13 +38,74 @@ class PerfumeFilter(FilterSet): # Use imported FilterSet
             pass
         return queryset
 
+        return queryset
+
+    def filter_external_ids(self, queryset, name, value):
+        """ Custom filter for comma-separated external IDs """
+        try:
+            ext_ids = [eid.strip() for eid in value.split(',') if eid.strip()]
+            if ext_ids:
+                return queryset.filter(external_id__in=ext_ids).distinct()
+        except ValueError: # Should not happen with string IDs, but good practice
+            pass
+        return queryset
+
     class Meta:
         model = Perfume
+        fields = { # Use dictionary format for more control if needed later
+            'gender': ['exact', 'iexact'],
+            'accords': ['exact'], # Assumes filtering by single accord ID
+            'season': ['iexact'],
+            'best_for': ['iexact'],
+            # price_min, price_max, brand, occasions, external_ids handled by custom filters/methods
+        }
+
+# --- New FilterSet for Recommendations ---
+
+class UserPerfumeMatchFilter(django_filters.FilterSet):
+    """
+    FilterSet for UserPerfumeMatch model, allowing filtering based on
+    related Perfume attributes.
+    """
+    # Filter by related Perfume's price
+    price_min = django_filters.NumberFilter(field_name='perfume__pricePerML', lookup_expr='gte') # Correct field name
+    price_max = django_filters.NumberFilter(field_name='perfume__pricePerML', lookup_expr='lte') # Correct field name
+
+    # Filter by related Perfume's occasions (comma-separated IDs)
+    occasions = django_filters.CharFilter(method='filter_perfume_occasions', label='Occasion IDs (comma-separated)')
+
+    # Filter by related Perfume's external ID (comma-separated)
+    external_ids = django_filters.CharFilter(method='filter_perfume_external_ids', label='External IDs (comma-separated)')
+
+    def filter_perfume_occasions(self, queryset, name, value):
+        """ Custom filter for comma-separated occasion IDs on the related perfume """
+        try:
+            occasion_ids = [int(oid.strip()) for oid in value.split(',') if oid.strip()]
+            if occasion_ids:
+                # Filter UserPerfumeMatch where the related perfume has any of the specified occasions
+                return queryset.filter(perfume__occasions__id__in=occasion_ids).distinct()
+        except ValueError:
+            pass # Handle potential non-integer values gracefully
+        return queryset # Return original queryset if value is empty or invalid
+
+    def filter_perfume_external_ids(self, queryset, name, value):
+        """ Custom filter for comma-separated external IDs on the related perfume """
+        try:
+            ext_ids = [eid.strip() for eid in value.split(',') if eid.strip()]
+            if ext_ids:
+                 # Filter UserPerfumeMatch where the related perfume has any of the specified external IDs
+                return queryset.filter(perfume__external_id__in=ext_ids).distinct()
+        except ValueError: # Should not happen with string IDs
+            pass
+        return queryset
+
+    class Meta:
+        model = UserPerfumeMatch
         fields = [
-            'gender',
-            'accords',
-            'season',
-            'best_for',
-            'price_min',
-            'price_max',
+            # 'price_min', # Handled by explicit filter definition above
+            # 'price_max', # Handled by explicit filter definition above
+            'occasions',
+            'external_ids',
+            # Add other fields from UserPerfumeMatch if direct filtering is needed
+            # e.g., 'score': ['gte', 'lte']
         ]
