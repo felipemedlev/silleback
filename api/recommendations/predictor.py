@@ -119,7 +119,9 @@ def _get_perfume_accord_data(all_accords: list):
                 'external_id': p.external_id,
                 'name': p.name,
                 'gender': str(p.gender).lower() if p.gender else 'unisex',
-                'popularity': p.popularity if p.popularity is not None else 0,
+                'recent_magnitude': p.popularity if p.popularity is not None else 0,
+                'rating_count': p.rating_count if p.rating_count is not None else 0,
+                'overall_rating': p.overall_rating if p.overall_rating is not None else 0,
             })
             # Retrieve accords in the order provided by the ORM/prefetch
             ordered_perfume_accords = [a.name.lower() for a in p.accords.all() if a.name]
@@ -161,7 +163,7 @@ def _get_perfume_accord_data(all_accords: list):
 
 
 # --- Core Recommendation Logic ---
-def generate_recommendations(user: AbstractUser, alpha: float = 0.5):
+def generate_recommendations(user: AbstractUser, alpha: float = 0.7):
     """
     Generates perfume recommendations for a given user based on their survey response,
     using a weighted accord matrix reflecting predominance and popularity boosting.
@@ -240,15 +242,16 @@ def generate_recommendations(user: AbstractUser, alpha: float = 0.5):
     # 6. Apply Popularity Boosting
     logger.info("Applying popularity boosting...")
     # Popularity is already in candidate_perfumes_df from _get_perfume_accord_data
-    # Ensure popularity is numeric, handle potential NaNs just in case (though handled in helper)
-    candidate_perfumes_df['popularity'] = pd.to_numeric(candidate_perfumes_df['popularity'], errors='coerce').fillna(0)
-
-    # Apply boosting formula (log scale)
-    # Use Decimal for alpha to avoid potential float precision issues if needed, though likely fine here
-    rating_count_boost = np.log1p(np.maximum(0, candidate_perfumes_df['popularity'].values))
+    candidate_perfumes_df['rating_count'] = pd.to_numeric(candidate_perfumes_df['rating_count'], errors='coerce').fillna(0)
+    candidate_perfumes_df['recent_magnitude'] = pd.to_numeric(candidate_perfumes_df['recent_magnitude'], errors='coerce').fillna(0)
+    candidate_perfumes_df['overall_rating'] = pd.to_numeric(candidate_perfumes_df['overall_rating'], errors='coerce').fillna(0)
+    rating_count_boost = np.log1p(np.maximum(0, candidate_perfumes_df['rating_count'].values))
+    recent_magnitude_boost = np.log1p(np.maximum(0, candidate_perfumes_df['recent_magnitude'].values))
+    overall_rating_boost = np.log1p(np.maximum(0, candidate_perfumes_df['overall_rating'].values))
+    perfumes_boost = rating_count_boost + recent_magnitude_boost + overall_rating_boost
     # Convert Decimal to float before multiplying with numpy array, then convert back for consistency
     alpha_float = float(alpha)
-    candidate_perfumes_df['boosted_score'] = candidate_perfumes_df['similarity_score'] + (alpha_float * rating_count_boost)
+    candidate_perfumes_df['boosted_score'] = candidate_perfumes_df['similarity_score'] + (alpha_float * perfumes_boost)
 
     # 7. Normalize Boosted Score to 0-1 range
     logger.info("Normalizing scores...")
