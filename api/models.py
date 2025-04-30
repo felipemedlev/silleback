@@ -87,17 +87,18 @@ class Perfume(models.Model):
     # Description & Composition
     description = models.TextField(blank=True, null=True)
 
-    # Original notes as JSONField (now commented out and replaced with ManyToMany)
-    # top_notes = models.JSONField(default=list, blank=True, help_text='List of top note names')
-    # middle_notes = models.JSONField(default=list, blank=True, help_text='List of middle note names')
-    # base_notes = models.JSONField(default=list, blank=True, help_text='List of base note names')
-
     # ManyToMany relationships for notes
     top_notes = models.ManyToManyField(Note, blank=True, related_name='perfumes_as_top')
     middle_notes = models.ManyToManyField(Note, blank=True, related_name='perfumes_as_middle')
     base_notes = models.ManyToManyField(Note, blank=True, related_name='perfumes_as_base')
 
-    accords = models.ManyToManyField(Accord, blank=True, related_name='perfumes')
+    # Use a through model for Accords to preserve order
+    accords = models.ManyToManyField(
+        Accord,
+        through='PerfumeAccordOrder',
+        blank=True,
+        related_name='perfumes'
+    )
 
     # Categorization & Usage
     gender = models.CharField(max_length=10, choices=GENDER_CHOICES, blank=True, null=True) # Allow blank/null if data missing
@@ -106,9 +107,9 @@ class Perfume(models.Model):
     best_for = models.CharField(max_length=5, choices=BEST_FOR_CHOICES, blank=True, null=True)
 
     # Pricing & URLs
-    pricePerML = models.DecimalField(max_digits=6, decimal_places=2, help_text='Price per milliliter', null=True, blank=True) # Allow null
-    thumbnailUrl = models.URLField(max_length=500, blank=True, null=True)
-    fullSizeUrl = models.URLField(max_length=500, blank=True, null=True)
+    price_per_ml = models.DecimalField(max_digits=6, decimal_places=2, help_text='Price per milliliter', null=True, blank=True) # Allow null
+    thumbnail_url = models.URLField(max_length=500, blank=True, null=True)
+    full_size_url = models.URLField(max_length=500, blank=True, null=True)
 
     # Ratings & Performance (from CSV)
     overall_rating = models.FloatField(null=True, blank=True, help_text="Overall rating from source")
@@ -127,6 +128,19 @@ class Perfume(models.Model):
     def __str__(self):
         return f"{self.name} by {self.brand.name}"
 
+    # Method to get accords in their specified order
+    def get_ordered_accords(self):
+        return self.accords.order_by('perfumeaccordorder__order')
+
+
+class PerfumeAccordOrder(models.Model):
+    perfume = models.ForeignKey(Perfume, on_delete=models.CASCADE)
+    accord = models.ForeignKey(Accord, on_delete=models.CASCADE)
+    order = models.PositiveIntegerField(default=0, db_index=True) # Add index for ordering performance
+
+    class Meta:
+        ordering = ['order'] # Default ordering for queries
+        unique_together = ('perfume', 'accord') # Prevent duplicates
 
 
 class SurveyResponse(models.Model):
@@ -156,6 +170,7 @@ class UserPerfumeMatch(models.Model):
 
     def __str__(self):
         return f"{self.user.email} - {self.perfume.name}: {self.match_percentage}"
+
 
 
 class SurveyQuestion(models.Model):

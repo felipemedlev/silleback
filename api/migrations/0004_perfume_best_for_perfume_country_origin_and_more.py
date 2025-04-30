@@ -77,7 +77,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AlterField(
             model_name='perfume',
-            name='pricePerML',
+            name='price_per_ml',
             field=models.DecimalField(blank=True, decimal_places=2, help_text='Price per milliliter', max_digits=6, null=True),
         ),
     ]

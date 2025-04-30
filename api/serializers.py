@@ -80,7 +80,7 @@ class PerfumeSerializer(serializers.ModelSerializer):
             'top_notes', 'middle_notes', 'base_notes',
             'accords', 'occasions',
             'gender', 'season', 'best_for', 'year_released', 'country_origin', # Keep original best_for in fields for now, will be handled by get_best_for
-            'pricePerML', 'thumbnailUrl', 'fullSizeUrl',
+            'price_per_ml', 'thumbnail_url', 'full_size_url',
             'overall_rating', 'rating_count', 'longevity_rating', 'sillage_rating', 'price_value_rating',
             'popularity',
             'similar_perfume_ids', 'recommended_perfume_ids', # Note: These expose external IDs
@@ -147,7 +147,7 @@ class PerfumeSummarySerializer(serializers.ModelSerializer):
     brand = serializers.StringRelatedField()
     class Meta:
         model = Perfume
-        fields = ('id', 'name', 'brand', 'thumbnailUrl', 'pricePerML', 'external_id') # Added external_id for consistency
+        fields = ('id', 'name', 'brand', 'thumbnail_url', 'price_per_ml', 'external_id') # Added external_id for consistency
 
 class CartItemSerializer(serializers.ModelSerializer):
     """ Serializer for displaying items within a cart. """
@@ -172,7 +172,7 @@ class CartItemSerializer(serializers.ModelSerializer):
     # def get_item_total(self, obj):
     #     # Basic calculation, might need refinement based on decant_size, box config etc.
     #     if obj.perfume and obj.price_at_addition:
-    #         return obj.quantity * obj.price_at_addition # Or calculate based on pricePerML * decant_size?
+    #         return obj.quantity * obj.price_at_addition # Or calculate based on price_per_ml * decant_size?
     #     # Add logic for box pricing if applicable
     #     return None
 

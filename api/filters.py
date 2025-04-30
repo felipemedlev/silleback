@@ -3,8 +3,8 @@ from .models import Perfume, UserPerfumeMatch # Import UserPerfumeMatch
 
 class PerfumeFilter(django_filters.FilterSet):
     # Define filters for fields not handled by default or needing specific lookups
-    price_min = django_filters.NumberFilter(field_name='pricePerML', lookup_expr='gte') # Corrected field name
-    price_max = django_filters.NumberFilter(field_name='pricePerML', lookup_expr='lte') # Corrected field name
+    price_min = django_filters.NumberFilter(field_name='price_per_ml', lookup_expr='gte') # Corrected field name
+    price_max = django_filters.NumberFilter(field_name='price_per_ml', lookup_expr='lte') # Corrected field name
     season = django_filters.CharFilter(field_name='season', lookup_expr='iexact')
     best_for = django_filters.CharFilter(field_name='best_for', lookup_expr='iexact')
 
@@ -68,8 +68,8 @@ class UserPerfumeMatchFilter(django_filters.FilterSet):
     related Perfume attributes.
     """
     # Filter by related Perfume's price
-    price_min = django_filters.NumberFilter(field_name='perfume__pricePerML', lookup_expr='gte') # Correct field name
-    price_max = django_filters.NumberFilter(field_name='perfume__pricePerML', lookup_expr='lte') # Correct field name
+    price_min = django_filters.NumberFilter(field_name='perfume__price_per_ml', lookup_expr='gte') # Correct field name
+    price_max = django_filters.NumberFilter(field_name='perfume__price_per_ml', lookup_expr='lte') # Correct field name
 
     # Filter by related Perfume's occasions (comma-separated IDs)
     occasions = django_filters.CharFilter(method='filter_perfume_occasions', label='Occasion IDs (comma-separated)')

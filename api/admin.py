@@ -6,7 +6,8 @@ from .models import (
     User, Brand, Occasion, Accord, Perfume, Note,
     PredefinedBox, SubscriptionTier, UserSubscription,
     Cart, CartItem, Order, OrderItem,
-    Rating, Favorite, SurveyResponse, UserPerfumeMatch, SurveyQuestion
+    Rating, Favorite, SurveyResponse, UserPerfumeMatch, SurveyQuestion,
+    PerfumeAccordOrder, # Added import
 )
 
 @admin.register(User)
@@ -62,10 +63,10 @@ class NoteAdmin(admin.ModelAdmin):
 
 @admin.register(Perfume)
 class PerfumeAdmin(admin.ModelAdmin):
-    list_display = ('name', 'brand', 'gender', 'pricePerML')
+    list_display = ('name', 'brand', 'gender', 'price_per_ml')
     search_fields = ('name', 'brand__name')
     list_filter = ('gender', 'brand')
-    filter_horizontal = ('accords', 'occasions', 'top_notes', 'middle_notes', 'base_notes')
+    filter_horizontal = ('occasions', 'top_notes', 'middle_notes', 'base_notes')
 
 @admin.register(PredefinedBox)
 class PredefinedBoxAdmin(admin.ModelAdmin):
@@ -149,3 +150,12 @@ class SurveyQuestionAdmin(admin.ModelAdmin):
 
     # Optional: Add validation or custom logic if needed
     # def clean(self): ...
+
+
+# Added registration
+@admin.register(PerfumeAccordOrder)
+class PerfumeAccordOrderAdmin(admin.ModelAdmin):
+    list_display = ('perfume', 'accord', 'order')
+    list_filter = ('perfume', 'accord')
+    search_fields = ('perfume__name', 'accord__name')
+    ordering = ('perfume', 'order')

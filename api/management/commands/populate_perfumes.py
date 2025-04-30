@@ -3,7 +3,7 @@
 import csv
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
-from api.models import Perfume, Brand, Accord, Occasion
+from api.models import Perfume, Brand, Accord, Occasion, Note, PerfumeAccordOrder # Import Note and PerfumeAccordOrder models
 import json # For parsing list-like strings if needed
 from decimal import Decimal, InvalidOperation # For helper method
 
@@ -33,8 +33,8 @@ class Command(BaseCommand):
                 required_headers = [
                     'Name', 'Perfume ID', 'Brand Name', 'Gender', 'overall rating',
                     'rating count', 'main accords', 'top notes', 'middle notes',
-                    'base notes', 'description', 'Occasions', 'pricePerML',
-                    'thumbnailUrl', 'fullSizeUrl', 'season', 'best_for',
+                    'base notes', 'description', 'Occasions', 'price_per_ml',
+                    'thumbnail_url', 'full_size_url', 'season', 'best_for',
                     'country_origin', 'year_released', 'similar perfumes',
                     'recommended perfumes', 'longevity', 'sillage', 'price for value',
                     'Recent Magnitude' # Added popularity source header
@@ -77,7 +77,7 @@ class Command(BaseCommand):
                             year_released = self.to_int_or_none(row.get('year_released'))
                             overall_rating = self.to_float_or_none(row.get('overall rating'))
                             rating_count = self.to_int_or_none(row.get('rating count'), default=0)
-                            price_per_ml = self.to_decimal_or_none(row.get('pricePerML'))
+                            price_per_ml = self.to_decimal_or_none(row.get('price_per_ml'))
                             longevity = self.to_float_or_none(row.get('longevity'))
                             sillage = self.to_float_or_none(row.get('sillage'))
                             price_value = self.to_float_or_none(row.get('price for value'))
@@ -91,12 +91,12 @@ class Command(BaseCommand):
                                 'name': row.get('Name', '').strip(),
                                 'brand': brand,
                                 'description': row.get('description', '').strip() or None,
-                                'top_notes': top_notes_list,
-                                'middle_notes': middle_notes_list,
-                                'base_notes': base_notes_list,
-                                'pricePerML': price_per_ml,
-                                'thumbnailUrl': row.get('thumbnailUrl', '').strip() or None,
-                                'fullSizeUrl': row.get('fullSizeUrl', '').strip() or None,
+                                # 'top_notes': top_notes_list, # Removed - Handled via M2M below
+                                # 'middle_notes': middle_notes_list, # Removed - Handled via M2M below
+                                # 'base_notes': base_notes_list, # Removed - Handled via M2M below
+                                'price_per_ml': price_per_ml,
+                                'thumbnail_url': row.get('thumbnail_url', '').strip() or None,
+                                'full_size_url': row.get('full_size_url', '').strip() or None,
                                 'gender': gender_raw if gender_raw in ['male', 'female', 'unisex'] else None,
                                 'season': season_raw if season_raw in ['winter', 'summer', 'autumn', 'spring'] else None,
                                 'best_for': best_for_raw if best_for_raw in ['day', 'night'] else None,
@@ -113,7 +113,7 @@ class Command(BaseCommand):
                             }
                             # Remove None values for fields that shouldn't be explicitly set to None if blank in CSV,
                             # except for JSON fields which default to list
-                            perfume_data = {k: v for k, v in perfume_data.items() if v is not None or k in ['top_notes', 'middle_notes', 'base_notes', 'similar_perfume_ids', 'recommended_perfume_ids']}
+                            perfume_data = {k: v for k, v in perfume_data.items() if v is not None or k in ['similar_perfume_ids', 'recommended_perfume_ids']} # Removed note fields
 
 
                             perfume, created = Perfume.objects.update_or_create(
@@ -122,13 +122,15 @@ class Command(BaseCommand):
                             )
 
                             # --- Handle ManyToMany Relationships ---
-                            # Accords
+                            # Accords - Use through model to preserve order
                             accord_names = self.parse_list_string(row.get('main accords', ''))
-                            perfume.accords.clear() # Clear existing before adding new ones
-                            for name in accord_names:
+                            # Clear existing ordered relationships for this perfume first
+                            PerfumeAccordOrder.objects.filter(perfume=perfume).delete()
+                            for index, name in enumerate(accord_names):
                                 if name:
                                     accord, _ = Accord.objects.get_or_create(name=name.strip())
-                                    perfume.accords.add(accord)
+                                    # Create the through model instance with the order
+                                    PerfumeAccordOrder.objects.create(perfume=perfume, accord=accord, order=index)
 
                             # Occasions
                             occasion_names = self.parse_list_string(row.get('Occasions', ''))

@@ -32,6 +32,7 @@ This file tracks the project's current status, including recent changes, current
 * [2025-04-08 12:39:10] - Completed Phase 5 (Box Logic API): Implemented read-only ViewSet and URL routing for PredefinedBox.
 * [2025-04-16 18:58] - Fixed incorrect placement of `filterset_class` in `api/views.py`, resolving issue with perfume filtering (brand, occasion, etc.).
 * [2025-04-16 19:04] - Fixed incorrect placement of `search_fields` in `api/views.py`, resolving issue with perfume search functionality.
+* [2025-04-26 12:35:52] - Resolved database column naming mismatch (camelCase vs. snake_case) and synchronized Django migration history. The `api_perfume` table in the target PostgreSQL database now uses `price_per_ml`, `thumbnail_url`, and `full_size_url` columns.
 
 
 *

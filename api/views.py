@@ -292,18 +292,18 @@ class CartViewSet(viewsets.ViewSet):
         quantity = input_serializer.validated_data['quantity']
         decant_size = input_serializer.validated_data.get('decant_size')
 
-        # Determine price - Use pricePerML if available and decant_size is provided,
+        # Determine price - Use price_per_ml if available and decant_size is provided,
         # otherwise maybe a default price or raise error if price cannot be determined.
         # This logic might need refinement based on actual pricing model.
         price = None
-        if perfume.pricePerML and decant_size:
-             # Ensure pricePerML is treated as Decimal
-             price = (Decimal(str(perfume.pricePerML)) * Decimal(decant_size))
-        elif perfume.pricePerML: # Fallback if no decant size but pricePerML exists? Needs clarification.
-             # price = perfume.pricePerML # Or maybe price of a standard size?
+        if perfume.price_per_ml and decant_size:
+             # Ensure price_per_ml is treated as Decimal
+             price = (Decimal(str(perfume.price_per_ml)) * Decimal(decant_size))
+        elif perfume.price_per_ml: # Fallback if no decant size but price_per_ml exists? Needs clarification.
+             # price = perfume.price_per_ml # Or maybe price of a standard size?
              return Response({"detail": "Decant size required to calculate price."}, status=status.HTTP_400_BAD_REQUEST)
         else:
-            # Handle cases where price cannot be determined (e.g., no pricePerML)
+            # Handle cases where price cannot be determined (e.g., no price_per_ml)
              return Response({"detail": "Could not determine price for this item."}, status=status.HTTP_400_BAD_REQUEST)
 
 

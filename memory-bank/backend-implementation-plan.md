@@ -37,7 +37,7 @@ The primary application logic for the API will reside within the `api` Django ap
     *   `user` (OneToOneField to User)
     *   `response_data` (JSONField)
     *   `completed_at` (DateTimeField)
-*   **Perfume:** Fields for `name`, `brand`, `description`, `notes` (JSONField), `pricePerML`, `thumbnailUrl`, `fullSizeUrl`, `gender`, `occasions` (ManyToManyField to `Occasion`), `accords` (ManyToManyField to `Accord`).
+*   **Perfume:** Fields for `name`, `brand`, `description`, `notes` (JSONField), `price_per_ml`, `thumbnail_url`, `full_size_url`, `gender`, `occasions` (ManyToManyField to `Occasion`), `accords` (ManyToManyField to `Accord`).
 *   **Brand:** Simple model with `name`. (ForeignKey from Perfume)
 *   **Occasion:** Simple model with `name`.
 *   **Accord:** Simple model with `name`, `description`.
@@ -395,7 +395,7 @@ sequenceDiagram
   - Create fixtures (JSON/YAML) or Django admin entries.
   - Optionally, write management commands to import from CSV.
 - **Perfumes:**
-  - Prepare CSV/JSON with fields: name, brand, description, notes (JSON), pricePerML, URLs, gender, occasions, accords.
+  - Prepare CSV/JSON with fields: name, brand, description, notes (JSON), price_per_ml, URLs, gender, occasions, accords.
   - Write import script or use fixtures.
 - **Predefined Boxes:**
   - Populate via admin or fixtures linking to perfumes.

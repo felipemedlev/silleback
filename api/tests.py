@@ -26,7 +26,7 @@ class RecommendationViewFilteringTests(APITestCase):
         cls.perfume1 = Perfume.objects.create(
             name='Perfume Low Price Day',
             brand=cls.brand1,
-            pricePerML=Decimal('10.00'), # Correct field name
+            price_per_ml=Decimal('10.00'), # Correct field name
             external_id='p1'
         )
         cls.perfume1.occasions.add(cls.occasion_day)
@@ -34,7 +34,7 @@ class RecommendationViewFilteringTests(APITestCase):
         cls.perfume2 = Perfume.objects.create(
             name='Perfume Mid Price Day Night',
             brand=cls.brand1,
-            pricePerML=Decimal('50.00'), # Correct field name
+            price_per_ml=Decimal('50.00'), # Correct field name
             external_id='p2'
         )
         cls.perfume2.occasions.add(cls.occasion_day, cls.occasion_night)
@@ -42,7 +42,7 @@ class RecommendationViewFilteringTests(APITestCase):
         cls.perfume3 = Perfume.objects.create(
             name='Perfume High Price Office',
             brand=cls.brand2,
-            pricePerML=Decimal('100.00'), # Correct field name
+            price_per_ml=Decimal('100.00'), # Correct field name
             external_id='p3'
         )
         cls.perfume3.occasions.add(cls.occasion_office)
@@ -50,7 +50,7 @@ class RecommendationViewFilteringTests(APITestCase):
         cls.perfume4 = Perfume.objects.create(
             name='Perfume Mid Price Office Day',
             brand=cls.brand2,
-            pricePerML=Decimal('60.00'), # Correct field name
+            price_per_ml=Decimal('60.00'), # Correct field name
             external_id='p4'
         )
         cls.perfume4.occasions.add(cls.occasion_office, cls.occasion_day)

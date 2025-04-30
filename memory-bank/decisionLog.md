@@ -86,3 +86,17 @@ This file records architectural and implementation decisions using a list format
 [2025-04-21 17:50:30] - **Decision:** Create a dedicated `GET /api/recommendations/` endpoint.
     - **Rationale:** Provides a clean interface for the frontend to fetch pre-calculated recommendations for the authenticated user.
     - **Implications:** Requires a new view (`RecommendationView`) and serializer (`UserPerfumeMatchSerializer`).
+
+---
+
+**[2025-04-26 12:35:52] - Database Column Rename & Migration Synchronization**
+
+*   **Decision:** Resolve database schema mismatch (camelCase columns in DB vs. snake_case in models/migration history) using manual SQL and fake migrations.
+    *   **Rationale:** Standard migration approaches failed due to complex state inconsistencies between the actual database state (PostgreSQL `sille_db`), the Django model state (`api/models.py`), and the state tracked by Django's migration history (`django_migrations` table). The `migrate` command appeared to be running against a different database initially, further complicating the issue. Direct SQL intervention combined with faking migrations was necessary to align the actual schema and the migration history.
+    *   **Implementation:**
+        1.  Deleted several conflicting/incorrectly generated migration files (`0016`, `0017`, `0018`).
+        2.  Executed manual `ALTER TABLE api_perfume RENAME COLUMN ...` commands directly on the target PostgreSQL database (`sille_db`) to change `pricePerML`, `thumbnailUrl`, `fullSizeUrl` to `price_per_ml`, `thumbnail_url`, `full_size_url`.
+        3.  Ran `makemigrations` to generate a new `0016` reflecting other model changes (notes fields, `best_for`).
+        4.  Manually deleted the old `0016` record from the `django_migrations` table via SQL.
+        5.  Used `python manage.py migrate api 0016 --fake` to mark the new migration `0016` as applied without running its SQL (as the database state already reflected these changes or the operations were based on incorrect assumptions like `_m2m` table names).
+        6.  Confirmed final state with `python manage.py migrate api` reporting \"No migrations to apply.\"
