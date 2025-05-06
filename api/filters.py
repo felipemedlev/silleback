@@ -1,5 +1,5 @@
 import django_filters # Use import django_filters instead of specific imports for clarity
-from .models import Perfume, UserPerfumeMatch # Import UserPerfumeMatch
+from .models import Perfume, UserPerfumeMatch, Occasion # Import UserPerfumeMatch and Occasion
 
 class PerfumeFilter(django_filters.FilterSet):
     # Define filters for fields not handled by default or needing specific lookups
@@ -11,7 +11,7 @@ class PerfumeFilter(django_filters.FilterSet):
     # Add filters for existing fields if needed for consistency or specific lookups
     gender = django_filters.CharFilter(field_name='gender', lookup_expr='iexact')
     brand = django_filters.CharFilter(method='filter_brand', label='Brand IDs (comma-separated)') # Use CharFilter for comma-separated values
-    occasions = django_filters.CharFilter(method='filter_occasions', label='Occasion IDs (comma-separated)')
+    occasions = django_filters.CharFilter(method='filter_occasions', label='Occasion Names (comma-separated)')
     # Add filter for external_id (comma-separated)
     external_ids = django_filters.CharFilter(method='filter_external_ids', label='External IDs (comma-separated)')
 
@@ -28,16 +28,25 @@ class PerfumeFilter(django_filters.FilterSet):
         return queryset # Return original queryset if value is empty or invalid
 
     def filter_occasions(self, queryset, name, value):
-        """ Custom filter for comma-separated occasion IDs """
+        """ Custom filter for comma-separated occasion names """
         try:
-            occasion_ids = [int(oid.strip()) for oid in value.split(',') if oid.strip()]
-            if occasion_ids:
-                # Use distinct() to avoid duplicates if a perfume matches multiple occasions
-                return queryset.filter(occasions__id__in=occasion_ids).distinct()
-        except ValueError:
-            pass
-        return queryset
-
+            occasion_names = [name.strip() for name in value.split(',') if name.strip()]
+            if occasion_names:
+                # Find Occasion objects matching the names
+                occasions = Occasion.objects.filter(name__in=occasion_names)
+                occasion_ids = [o.id for o in occasions]
+                # Optional: Add logging or warning if len(occasion_ids) != len(occasion_names)
+                if len(occasion_ids) != len(occasion_names):
+                    # Handle cases where some names might not match existing Occasions
+                    # For now, we proceed with the IDs found.
+                    pass
+                if occasion_ids:
+                    # Use distinct() to avoid duplicates if a perfume matches multiple occasions
+                    return queryset.filter(occasions__id__in=occasion_ids).distinct()
+        except Exception as e: # Catch potential errors during lookup or filtering
+            # Log the error (import logging first)
+            # logger.error(f"Error filtering occasions by name: {e}")
+            pass # Or return queryset.none()
         return queryset
 
     def filter_external_ids(self, queryset, name, value):
@@ -72,21 +81,30 @@ class UserPerfumeMatchFilter(django_filters.FilterSet):
     price_max = django_filters.NumberFilter(field_name='perfume__price_per_ml', lookup_expr='lte') # Correct field name
 
     # Filter by related Perfume's occasions (comma-separated IDs)
-    occasions = django_filters.CharFilter(method='filter_perfume_occasions', label='Occasion IDs (comma-separated)')
+    occasions = django_filters.CharFilter(method='filter_perfume_occasions', label='Occasion Names (comma-separated)')
 
     # Filter by related Perfume's external ID (comma-separated)
     external_ids = django_filters.CharFilter(method='filter_perfume_external_ids', label='External IDs (comma-separated)')
 
     def filter_perfume_occasions(self, queryset, name, value):
-        """ Custom filter for comma-separated occasion IDs on the related perfume """
+        """ Custom filter for comma-separated occasion names on the related perfume """
         try:
-            occasion_ids = [int(oid.strip()) for oid in value.split(',') if oid.strip()]
-            if occasion_ids:
-                # Filter UserPerfumeMatch where the related perfume has any of the specified occasions
-                return queryset.filter(perfume__occasions__id__in=occasion_ids).distinct()
-        except ValueError:
-            pass # Handle potential non-integer values gracefully
-        return queryset # Return original queryset if value is empty or invalid
+            occasion_names = [name.strip() for name in value.split(',') if name.strip()]
+            if occasion_names:
+                # Find Occasion objects matching the names
+                occasions = Occasion.objects.filter(name__in=occasion_names)
+                occasion_ids = [o.id for o in occasions]
+                # Optional: Add logging or warning if len(occasion_ids) != len(occasion_names)
+                if len(occasion_ids) != len(occasion_names):
+                    pass # Handle cases where some names might not match
+                if occasion_ids:
+                    # Filter UserPerfumeMatch where the related perfume has any of the specified occasions
+                    return queryset.filter(perfume__occasions__id__in=occasion_ids).distinct()
+        except Exception as e: # Catch potential errors
+            # Log the error
+            # logger.error(f"Error filtering perfume occasions by name: {e}")
+            pass
+        return queryset # Return original queryset if value is empty, invalid, or error occurs
 
     def filter_perfume_external_ids(self, queryset, name, value):
         """ Custom filter for comma-separated external IDs on the related perfume """
