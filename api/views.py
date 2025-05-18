@@ -7,18 +7,19 @@ from rest_framework import filters as drf_filters
 from django_filters.rest_framework import DjangoFilterBackend
 from .filters import PerfumeFilter, UserPerfumeMatchFilter # Import the custom filtersets
 from django.db import transaction # Import transaction
+from django.utils import timezone # Import timezone
 # Q object import removed as it's no longer used in this view
-from .models import ( # Add Cart, CartItem, PredefinedBox, SubscriptionTier, UserSubscription, Order, OrderItem, Rating, Favorite
+from .models import ( # Add Cart, CartItem, PredefinedBox, SubscriptionTier, UserSubscription, Order, OrderItem, Rating, Favorite, Coupon
     Brand, Occasion, Accord, Perfume, User, SurveyResponse, UserPerfumeMatch,
     Cart, CartItem, PredefinedBox, SubscriptionTier, UserSubscription,
-    Order, OrderItem, Rating, Favorite, SurveyQuestion # Added SurveyQuestion
+    Order, OrderItem, Rating, Favorite, SurveyQuestion, Coupon # Added SurveyQuestion and Coupon
 )
-from .serializers import ( # Add CartSerializer, CartItemSerializer, CartItemAddSerializer, PredefinedBoxSerializer, SubscriptionTierSerializer, UserSubscriptionSerializer, SubscribeSerializer, OrderSerializer, OrderItemSerializer, OrderCreateSerializer, RatingSerializer, FavoriteSerializer, FavoriteListSerializer
+from .serializers import ( # Add CartSerializer, CartItemSerializer, CartItemAddSerializer, PredefinedBoxSerializer, SubscriptionTierSerializer, UserSubscriptionSerializer, SubscribeSerializer, OrderSerializer, OrderItemSerializer, OrderCreateSerializer, RatingSerializer, FavoriteSerializer, FavoriteListSerializer, CouponSerializer
     BrandSerializer, OccasionSerializer, AccordSerializer, PerfumeSerializer,
     UserSerializer, SurveyResponseSerializer, CartSerializer, CartItemSerializer, CartItemAddSerializer,
     PredefinedBoxSerializer, SubscriptionTierSerializer, UserSubscriptionSerializer, SubscribeSerializer,
     OrderSerializer, OrderItemSerializer, OrderCreateSerializer,
-    RatingSerializer, FavoriteSerializer, FavoriteListSerializer
+    RatingSerializer, FavoriteSerializer, FavoriteListSerializer, CouponSerializer
 )
 from decimal import Decimal, InvalidOperation # Import InvalidOperation
 import logging # Import logging
@@ -650,6 +651,71 @@ class FavoriteViewSet(mixins.ListModelMixin,
         favorite = get_object_or_404(Favorite, user=user, perfume=perfume)
         favorite.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# --- Coupon ViewSet ---
+class CouponViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API endpoint that allows coupons to be viewed and validated.
+    - GET /api/coupons/ : List all active coupons (admin/debug purposes primarily)
+    - GET /api/coupons/{code}/ : Retrieve a specific coupon by code (admin/debug)
+    - POST /api/coupons/validate_coupon/ : Validate a coupon code (for cart usage)
+    """
+    queryset = Coupon.objects.filter(is_active=True)
+    serializer_class = CouponSerializer
+    permission_classes = [permissions.AllowAny] # Allow anyone to validate, listing might be restricted later
+    lookup_field = 'code' # Use 'code' for retrieving individual coupons
+
+    # For admin/debug, listing all active coupons might be okay.
+    # For production, you might want to restrict the list view.
+
+    @action(detail=False, methods=['post'], url_path='validate', permission_classes=[permissions.AllowAny])
+    def validate_coupon(self, request):
+        """
+        Validates a coupon code and returns its details if valid.
+        Expects: {"code": "COUPON_CODE", "cart_total": 100.00 (optional)}
+        """
+        coupon_code = request.data.get('code')
+        cart_total_str = request.data.get('cart_total')
+
+        if not coupon_code:
+            return Response({"detail": "Coupon code is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        coupon_code = coupon_code.upper() # Ensure uppercase for lookup
+
+        try:
+            coupon = Coupon.objects.get(code=coupon_code, is_active=True)
+        except Coupon.DoesNotExist:
+            return Response({"detail": "Invalid or expired coupon code."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Check expiry date
+        if coupon.expiry_date and coupon.expiry_date < timezone.now():
+            coupon.is_active = False # Deactivate if expired
+            coupon.save()
+            return Response({"detail": "Coupon has expired."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check usage limits
+        if coupon.max_uses is not None and coupon.uses_count >= coupon.max_uses:
+            return Response({"detail": "Coupon has reached its maximum usage limit."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check minimum purchase amount if cart_total is provided
+        if coupon.min_purchase_amount is not None and cart_total_str is not None:
+            try:
+                cart_total = Decimal(cart_total_str)
+                if cart_total < coupon.min_purchase_amount:
+                    return Response(
+                        {"detail": f"Minimum purchase of ${coupon.min_purchase_amount} required for this coupon."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            except InvalidOperation:
+                 return Response({"detail": "Invalid cart_total provided."}, status=status.HTTP_400_BAD_REQUEST)
+            except TypeError: # Handle if cart_total_str is None but coupon.min_purchase_amount is not
+                pass # If cart_total not provided, skip this check for now or decide on behavior
+
+        serializer = self.get_serializer(coupon)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+# --- End Coupon ViewSet ---
 
 
 # --- Recommendation View ---

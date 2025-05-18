@@ -1,10 +1,10 @@
 from djoser.serializers import UserCreateSerializer as BaseUserCreateSerializer
 from djoser.serializers import UserSerializer as BaseUserSerializer
 from rest_framework import serializers
-from .models import ( # Add Cart, CartItem, PredefinedBox, SubscriptionTier, UserSubscription, Order, OrderItem, Rating, Favorite, Note
+from .models import ( # Add Cart, CartItem, PredefinedBox, SubscriptionTier, UserSubscription, Order, OrderItem, Rating, Favorite, Note, Coupon
     Brand, Occasion, Accord, Perfume, SurveyResponse, UserPerfumeMatch,
     Cart, CartItem, PredefinedBox, SubscriptionTier, UserSubscription,
-    Order, OrderItem, Rating, Favorite, Note
+    Order, OrderItem, Rating, Favorite, Note, Coupon
 )
 from django.contrib.auth import get_user_model
 
@@ -374,3 +374,50 @@ class UserPerfumeMatchSerializer(serializers.ModelSerializer):
         read_only_fields = fields # This data is read-only via the API
 
 # --- End Recommendation Serializer ---
+
+# --- Coupon Serializer ---
+
+class CouponSerializer(serializers.ModelSerializer):
+    """
+    Serializer for Coupon model.
+    Handles creation, retrieval, and updates of coupons.
+    """
+    class Meta:
+        model = Coupon
+        fields = (
+            'id', 'code', 'discount_type', 'value', 'description',
+            'min_purchase_amount', 'expiry_date', 'is_active',
+            'max_uses', 'uses_count', 'created_at', 'updated_at'
+        )
+        read_only_fields = ('id', 'uses_count', 'created_at', 'updated_at')
+
+    def validate_code(self, value):
+        """
+        Ensure code is uppercase.
+        """
+        return value.upper()
+
+    def validate(self, data):
+        """
+        Validate discount_type and value.
+        """
+        # Access instance during updates
+        instance = getattr(self, 'instance', None)
+        discount_type = data.get('discount_type', instance.discount_type if instance else None)
+        value = data.get('value', instance.value if instance else None)
+
+        if discount_type == 'percentage':
+            if not (0 < value <= 100):
+                raise serializers.ValidationError({'value': 'Percentage value must be between 0 (exclusive) and 100 (inclusive).'})
+        elif discount_type == 'fixed':
+            if value <= 0:
+                raise serializers.ValidationError({'value': 'Fixed discount value must be positive.'})
+
+        # Ensure min_purchase_amount is not negative if provided
+        min_purchase_amount = data.get('min_purchase_amount')
+        if min_purchase_amount is not None and min_purchase_amount < 0:
+            raise serializers.ValidationError({'min_purchase_amount': 'Minimum purchase amount cannot be negative.'})
+
+        return data
+
+# --- End Coupon Serializer ---

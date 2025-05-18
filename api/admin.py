@@ -7,7 +7,7 @@ from .models import (
     PredefinedBox, SubscriptionTier, UserSubscription,
     Cart, CartItem, Order, OrderItem,
     Rating, Favorite, SurveyResponse, UserPerfumeMatch, SurveyQuestion,
-    PerfumeAccordOrder, # Added import
+    PerfumeAccordOrder, Coupon, # Added import Coupon
 )
 
 @admin.register(User)
@@ -159,3 +159,33 @@ class PerfumeAccordOrderAdmin(admin.ModelAdmin):
     list_filter = ('perfume', 'accord')
     search_fields = ('perfume__name', 'accord__name')
     ordering = ('perfume', 'order')
+
+@admin.register(Coupon)
+class CouponAdmin(admin.ModelAdmin):
+    list_display = ('code', 'discount_type', 'value', 'min_purchase_amount', 'expiry_date', 'is_active', 'uses_count', 'max_uses')
+    list_filter = ('discount_type', 'is_active', 'expiry_date')
+    search_fields = ('code', 'description')
+    list_editable = ('is_active', 'value', 'min_purchase_amount', 'expiry_date', 'max_uses')
+    ordering = ('-created_at',)
+    fieldsets = (
+        (None, {
+            'fields': ('code', 'description', 'is_active')
+        }),
+        ('Discount Details', {
+            'fields': ('discount_type', 'value')
+        }),
+        ('Conditions & Limits', {
+            'fields': ('min_purchase_amount', 'expiry_date', 'max_uses')
+        }),
+        ('Usage Tracking', {
+            'fields': ('uses_count',), # uses_count is read-only usually
+        }),
+    )
+    readonly_fields = ('uses_count', 'created_at', 'updated_at')
+
+    def get_readonly_fields(self, request, obj=None):
+        # Make uses_count always read-only
+        # Add created_at and updated_at for existing objects
+        if obj: # when editing an object
+            return self.readonly_fields + ('created_at', 'updated_at')
+        return self.readonly_fields

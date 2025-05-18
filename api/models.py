@@ -410,3 +410,45 @@ class Favorite(models.Model):
 
     def __str__(self):
         return f"{self.user.email} favorited {self.perfume.name}"
+
+
+class Coupon(models.Model):
+    """
+    Represents a discount coupon.
+    """
+    DISCOUNT_TYPE_CHOICES = [
+        ('percentage', 'Percentage'),
+        ('fixed', 'Fixed Amount'),
+    ]
+
+    code = models.CharField(max_length=50, unique=True, help_text="User-facing code (e.g., SUMMER10). Should be stored in uppercase.")
+    discount_type = models.CharField(max_length=20, choices=DISCOUNT_TYPE_CHOICES)
+    value = models.DecimalField(max_digits=10, decimal_places=2, help_text="Discount value (e.g., 10 for 10% or 5000 for $5000 CLP)")
+    description = models.TextField(blank=True, null=True)
+    min_purchase_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, help_text="Minimum cart total required to apply")
+    expiry_date = models.DateTimeField(null=True, blank=True, help_text="Optional expiry date and time")
+    is_active = models.BooleanField(default=True, help_text="Whether the coupon is currently active")
+    max_uses = models.PositiveIntegerField(null=True, blank=True, help_text="Maximum number of times this coupon can be used in total")
+    uses_count = models.PositiveIntegerField(default=0, help_text="How many times this coupon has been used")
+    # Consider adding max_uses_per_user later if needed
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.code
+
+    def clean(self):
+        # Ensure code is uppercase
+        if self.code:
+            self.code = self.code.upper()
+        # Validate percentage value if type is percentage
+        if self.discount_type == 'percentage' and (self.value <= 0 or self.value > 100):
+            raise ValidationError({'value': 'Percentage value must be between 0 and 100.'})
+        if self.discount_type == 'fixed' and self.value <= 0:
+            raise ValidationError({'value': 'Fixed discount value must be positive.'})
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Coupon"
+        verbose_name_plural = "Coupons"

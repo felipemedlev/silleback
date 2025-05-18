@@ -14,6 +14,7 @@ router.register(r'subscriptions', views.SubscriptionViewSet, basename='subscript
 router.register(r'orders', views.OrderViewSet, basename='order') # Register OrderViewSet
 router.register(r'favorites', views.FavoriteViewSet, basename='favorite') # Register FavoriteViewSet
 router.register(r'surveyquestion', views.SurveyQuestionViewSet, basename='surveyquestion') # Register SurveyQuestionViewSet
+router.register(r'coupons', views.CouponViewSet, basename='coupon') # Register CouponViewSet
 
 # The API URLs are now determined automatically by the router.
 # Additionally, we include the login URLs for the browsable API.
