@@ -289,42 +289,76 @@ class CartViewSet(viewsets.ViewSet):
         input_serializer = CartItemAddSerializer(data=request.data)
         input_serializer.is_valid(raise_exception=True)
 
-        perfume = input_serializer.validated_data['perfume_id']
-        quantity = input_serializer.validated_data['quantity']
-        decant_size = input_serializer.validated_data.get('decant_size')
+        validated_data = input_serializer.validated_data
+        product_type = validated_data['product_type']
+        quantity = validated_data['quantity']
 
-        # Determine price - Use price_per_ml if available and decant_size is provided,
-        # otherwise maybe a default price or raise error if price cannot be determined.
-        # This logic might need refinement based on actual pricing model.
+        perfume = None
+        decant_size = None
         price = None
-        if perfume.price_per_ml and decant_size:
-             # Ensure price_per_ml is treated as Decimal
-             price = (Decimal(str(perfume.price_per_ml)) * Decimal(decant_size))
-        elif perfume.price_per_ml: # Fallback if no decant size but price_per_ml exists? Needs clarification.
-             # price = perfume.price_per_ml # Or maybe price of a standard size?
-             return Response({"detail": "Decant size required to calculate price."}, status=status.HTTP_400_BAD_REQUEST)
-        else:
-            # Handle cases where price cannot be determined (e.g., no price_per_ml)
-             return Response({"detail": "Could not determine price for this item."}, status=status.HTTP_400_BAD_REQUEST)
+        box_configuration = None
+        item_defaults = {'quantity': quantity}
 
+        if product_type == 'perfume':
+            perfume = validated_data['perfume_id']
+            decant_size = validated_data['decant_size'] # This is now required by serializer for 'perfume'
 
-        # Use transaction.atomic for safety when modifying cart items
-        with transaction.atomic():
-            # Check if item already exists (same perfume, same decant size)
+            if perfume.price_per_ml and decant_size:
+                price = (Decimal(str(perfume.price_per_ml)) * Decimal(decant_size))
+            # The serializer should have already validated that price can be determined for perfume type
+            # or raised an error if perfume.price_per_ml is missing.
+            # Adding a safeguard here just in case, though ideally serializer handles it.
+            elif not perfume.price_per_ml:
+                 return Response({"detail": f"Price per ml not set for perfume {perfume.name}."}, status=status.HTTP_400_BAD_REQUEST)
+            else: # Should not be reached if serializer validation is correct
+                 return Response({"detail": "Could not determine price for perfume item."}, status=status.HTTP_400_BAD_REQUEST)
+
+            item_defaults.update({
+                'perfume': perfume,
+                'name': perfume.name, # Set name from perfume for perfume type
+                'decant_size': decant_size,
+                'price_at_addition': price,
+                'product_type': 'perfume'
+            })
             cart_item, created = CartItem.objects.get_or_create(
                 cart=cart,
                 perfume=perfume,
-                decant_size=decant_size, # Match on decant size as well
-                product_type='perfume', # Assuming adding perfumes for now
-                defaults={'quantity': quantity, 'price_at_addition': price}
+                decant_size=decant_size,
+                product_type='perfume',
+                defaults=item_defaults
             )
 
-            if not created:
-                # If item exists, update quantity and potentially price_at_addition if needed
-                cart_item.quantity += quantity
-                # Optionally update price_at_addition if prices can change while item is in cart
-                # cart_item.price_at_addition = price
-                cart_item.save()
+        elif product_type == 'box':
+            price = validated_data['price']
+            box_configuration = validated_data['box_configuration']
+            name = validated_data['name'] # Get name for the box from payload
+
+            # Extract decant_size for the box from its configuration if available
+            # The frontend sends itemData.details as box_configuration, which contains decantSize
+            box_decant_size = None
+            if isinstance(box_configuration, dict) and 'decantSize' in box_configuration:
+                box_decant_size = box_configuration.get('decantSize')
+
+            item_defaults.update({
+                'name': name, # Set name for the box
+                'price_at_addition': price,
+                'box_configuration': box_configuration,
+                'product_type': 'box',
+                'decant_size': box_decant_size # Set decant_size for the box
+                # perfume will be None for 'box' type
+            })
+            cart_item = CartItem.objects.create(cart=cart, **item_defaults)
+            created = True
+
+        else:
+            # Should not happen if serializer validation is correct
+            return Response({"detail": "Invalid product_type processing."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        if not created and product_type == 'perfume': # Only update quantity for existing perfume items
+            cart_item.quantity += quantity
+            # Optionally update price_at_addition if prices can change while item is in cart
+            # cart_item.price_at_addition = price
+            cart_item.save()
 
         # Return the updated cart state
         cart_serializer = CartSerializer(cart, context={'request': request})

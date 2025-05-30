@@ -134,11 +134,45 @@ class SurveyResponseSerializer(serializers.ModelSerializer):
 
 
 class CartItemAddSerializer(serializers.Serializer):
-    """Serializer specifically for adding items to the cart."""
-    perfume_id = serializers.PrimaryKeyRelatedField(queryset=Perfume.objects.all(), required=True)
+    """Serializer for adding items (perfumes or boxes) to the cart."""
+    product_type = serializers.ChoiceField(choices=CartItem.PRODUCT_TYPE_CHOICES)
+    perfume_id = serializers.PrimaryKeyRelatedField(queryset=Perfume.objects.all(), required=False, allow_null=True)
     quantity = serializers.IntegerField(min_value=1, default=1)
-    decant_size = serializers.IntegerField(required=False, allow_null=True)
-    # product_type and box_configuration could be added here if needed for adding boxes
+    decant_size = serializers.IntegerField(required=False, allow_null=True) # For perfumes
+    box_configuration = serializers.JSONField(required=False, allow_null=True) # For boxes
+    name = serializers.CharField(max_length=255, required=False, allow_blank=True) # For box name primarily
+    price = serializers.DecimalField(max_digits=10, decimal_places=2, required=False) # For box price primarily
+
+    def validate(self, data):
+        product_type = data.get('product_type')
+        perfume_id = data.get('perfume_id')
+        box_configuration = data.get('box_configuration')
+        name = data.get('name')
+        price = data.get('price')
+        decant_size = data.get('decant_size')
+
+        if product_type == 'perfume':
+            if not perfume_id:
+                raise serializers.ValidationError({"perfume_id": "perfume_id is required for product_type 'perfume'."})
+            if not decant_size: # Assuming decant_size is required for individual perfumes
+                raise serializers.ValidationError({"decant_size": "decant_size is required for product_type 'perfume'."})
+            # For perfumes, name and price will be derived from the Perfume object in the view
+            data.pop('name', None) # Remove if sent, not used for perfume type here
+            data.pop('price', None) # Remove if sent, not used for perfume type here
+            data.pop('box_configuration', None) # Ensure box_configuration is not for perfume
+        elif product_type == 'box':
+            if not box_configuration:
+                raise serializers.ValidationError({"box_configuration": "box_configuration is required for product_type 'box'."})
+            if not name:
+                raise serializers.ValidationError({"name": "name is required for product_type 'box'."})
+            if price is None: # Price must be explicitly provided for a box
+                raise serializers.ValidationError({"price": "price is required for product_type 'box'."})
+            if perfume_id:
+                raise serializers.ValidationError({"perfume_id": "perfume_id should not be provided for product_type 'box'."})
+            data.pop('decant_size', None) # Ensure decant_size is not for box type here
+        else:
+            raise serializers.ValidationError({"product_type": "Invalid product_type."})
+        return data
 
 # --- Cart Serializers ---
 
@@ -161,15 +195,15 @@ class CartItemSerializer(serializers.ModelSerializer):
     # item_total = serializers.SerializerMethodField()
 
     class Meta:
-        model = 'api.CartItem' # Use string import
-        fields = (
-            'id', 'product_type', 'perfume', 'perfume_id', 'quantity',
-            'decant_size', 'price_at_addition', 'box_configuration', 'added_at'
-            # 'item_total'
-        )
-        read_only_fields = ('id', 'price_at_addition', 'added_at') # Price is set on addition
+      model = CartItem # Use direct model import
+      fields = (
+        'id', 'product_type', 'perfume', 'perfume_id', 'quantity',
+        'decant_size', 'price_at_addition', 'box_configuration', 'added_at'
+        # 'item_total'
+      )
+      read_only_fields = ('id', 'price_at_addition', 'added_at') # Price is set on addition
 
-    # def get_item_total(self, obj):
+      # def get_item_total(self, obj):
     #     # Basic calculation, might need refinement based on decant_size, box config etc.
     #     if obj.perfume and obj.price_at_addition:
     #         return obj.quantity * obj.price_at_addition # Or calculate based on price_per_ml * decant_size?
@@ -204,9 +238,9 @@ class CartSerializer(serializers.ModelSerializer):
     # cart_total = serializers.SerializerMethodField()
 
     class Meta:
-        model = 'api.Cart' # Use string import
-        fields = ('id', 'user', 'items', 'created_at', 'updated_at') # Add 'cart_total' if implemented
-        read_only_fields = ('id', 'user', 'created_at', 'updated_at', 'items')
+      model = Cart # Use direct model import
+      fields = ('id', 'user', 'items', 'created_at', 'updated_at') # Add 'cart_total' if implemented
+      read_only_fields = ('id', 'user', 'created_at', 'updated_at', 'items')
 
     # def get_cart_total(self, obj):
     #     # Sum up item totals - requires item_total on CartItemSerializer

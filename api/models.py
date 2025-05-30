@@ -231,25 +231,25 @@ class CartItem(models.Model):
 
     cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name='items')
     product_type = models.CharField(max_length=10, choices=PRODUCT_TYPE_CHOICES, default='perfume')
+    name = models.CharField(max_length=255, blank=True, null=True, help_text="Name of the item (e.g., perfume name or box name like 'AI Box (4 x 5ml)')")
     # Link to Perfume, nullable if it's a box defined by box_configuration
     perfume = models.ForeignKey(Perfume, on_delete=models.CASCADE, null=True, blank=True, related_name='cart_items')
     quantity = models.PositiveIntegerField(default=1)
-    # Decant size in ML, relevant for perfume items or subscription box items
-    decant_size = models.IntegerField(null=True, blank=True, help_text="Size of decant in ML, if applicable")
+    # Decant size in ML, relevant for perfume items or the overall decant size for items in a box
+    decant_size = models.IntegerField(null=True, blank=True, help_text="Size of decant in ML (for individual perfumes or items in a box)")
     # Store price at the time of addition to handle price fluctuations
     price_at_addition = models.DecimalField(max_digits=10, decimal_places=2)
     # For custom boxes (AI or Manual), store configuration details
-    box_configuration = models.JSONField(null=True, blank=True, help_text="JSON configuration for custom boxes")
+    box_configuration = models.JSONField(null=True, blank=True, help_text="JSON configuration for boxes (e.g., list of perfumes, specific decant size for the box)")
     added_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        if self.product_type == 'perfume' and self.perfume:
-            item_name = self.perfume.name
-        elif self.product_type == 'box':
-            item_name = "Custom Box" # Or derive from box_configuration if possible
-        else:
-            item_name = "Unknown Item"
-        return f"{self.quantity} x {item_name} in cart {self.cart.id}"
+        display_name = self.name # Use the new name field
+        if not display_name and self.product_type == 'perfume' and self.perfume:
+            display_name = self.perfume.name
+        elif not display_name:
+            display_name = f"Unnamed {self.product_type} item"
+        return f"{self.quantity} x {display_name} in cart {self.cart.id}"
 
     def clean(self):
         # Ensure either perfume or box_configuration is set depending on product_type
