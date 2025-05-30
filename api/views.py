@@ -365,8 +365,8 @@ class CartViewSet(viewsets.ViewSet):
         return Response(cart_serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
 
-    @action(detail=True, methods=['delete'], url_path='items/(?P<item_pk>[^/.]+)')
-    def remove_item(self, request, pk=None, item_pk=None):
+    @action(detail=False, methods=['delete'], url_path='items/(?P<item_pk>[^/.]+)')
+    def remove_item(self, request, item_pk=None): # pk (cart_pk) is no longer passed by DRF for detail=False
          """
          Remove a specific item from the cart.
          Corresponds to DELETE /api/cart/items/{item_id}/

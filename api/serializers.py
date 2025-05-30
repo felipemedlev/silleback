@@ -134,44 +134,51 @@ class SurveyResponseSerializer(serializers.ModelSerializer):
 
 
 class CartItemAddSerializer(serializers.Serializer):
-    """Serializer for adding items (perfumes or boxes) to the cart."""
-    product_type = serializers.ChoiceField(choices=CartItem.PRODUCT_TYPE_CHOICES)
-    perfume_id = serializers.PrimaryKeyRelatedField(queryset=Perfume.objects.all(), required=False, allow_null=True)
-    quantity = serializers.IntegerField(min_value=1, default=1)
-    decant_size = serializers.IntegerField(required=False, allow_null=True) # For perfumes
-    box_configuration = serializers.JSONField(required=False, allow_null=True) # For boxes
-    name = serializers.CharField(max_length=255, required=False, allow_blank=True) # For box name primarily
-    price = serializers.DecimalField(max_digits=10, decimal_places=2, required=False) # For box price primarily
+    """Serializer for adding items (boxes with decants) to the cart. Individual perfumes are not allowed."""
+    product_type = serializers.ChoiceField(choices=[('box', 'Box')]) # Only 'box' is allowed
+    # perfume_id = serializers.PrimaryKeyRelatedField(queryset=Perfume.objects.all(), required=False, allow_null=True) # Removed, perfumes are in box_configuration
+    quantity = serializers.HiddenField(default=1) # Each box added is unique, quantity is always 1
+    # decant_size = serializers.IntegerField(required=False, allow_null=True) # Removed, decant size is in box_configuration
+    box_configuration = serializers.JSONField(required=True) # For boxes, this is mandatory
+    name = serializers.CharField(max_length=255, required=True) # For box name, e.g., "AI Discovery Box (4x5ml)"
+    price = serializers.DecimalField(max_digits=10, decimal_places=2, required=True) # For box price
+
+    def validate_product_type(self, value):
+        if value != 'box':
+            raise serializers.ValidationError("Only 'box' product_type is allowed.")
+        return value
+
+    def validate_box_configuration(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("box_configuration must be a JSON object.")
+        if 'perfumes' not in value or not isinstance(value['perfumes'], list):
+            raise serializers.ValidationError("box_configuration must contain a 'perfumes' list.")
+        if not value['perfumes']:
+            raise serializers.ValidationError("'perfumes' list cannot be empty.")
+        if 'decant_size' not in value or not isinstance(value['decant_size'], (int, float)):
+            raise serializers.ValidationError("box_configuration must contain a numeric 'decant_size'.")
+        if 'decant_count' not in value or not isinstance(value['decant_count'], int):
+            raise serializers.ValidationError("box_configuration must contain an integer 'decant_count'.")
+
+        # Validate each perfume entry in the box_configuration
+        for perfume_entry in value['perfumes']:
+            if not isinstance(perfume_entry, dict):
+                raise serializers.ValidationError("Each item in 'perfumes' list must be a JSON object.")
+            if 'perfume_id_backend' not in perfume_entry and 'external_id' not in perfume_entry : # Check for one of the identifiers
+                 raise serializers.ValidationError("Each perfume in box_configuration must have 'perfume_id_backend' or 'external_id'.")
+            # Add more validation for perfume_entry if needed (e.g., name, brand)
+        return value
 
     def validate(self, data):
-        product_type = data.get('product_type')
-        perfume_id = data.get('perfume_id')
-        box_configuration = data.get('box_configuration')
-        name = data.get('name')
-        price = data.get('price')
-        decant_size = data.get('decant_size')
+        # product_type is already validated by validate_product_type
+        # box_configuration is already validated by validate_box_configuration
 
-        if product_type == 'perfume':
-            if not perfume_id:
-                raise serializers.ValidationError({"perfume_id": "perfume_id is required for product_type 'perfume'."})
-            if not decant_size: # Assuming decant_size is required for individual perfumes
-                raise serializers.ValidationError({"decant_size": "decant_size is required for product_type 'perfume'."})
-            # For perfumes, name and price will be derived from the Perfume object in the view
-            data.pop('name', None) # Remove if sent, not used for perfume type here
-            data.pop('price', None) # Remove if sent, not used for perfume type here
-            data.pop('box_configuration', None) # Ensure box_configuration is not for perfume
-        elif product_type == 'box':
-            if not box_configuration:
-                raise serializers.ValidationError({"box_configuration": "box_configuration is required for product_type 'box'."})
-            if not name:
-                raise serializers.ValidationError({"name": "name is required for product_type 'box'."})
-            if price is None: # Price must be explicitly provided for a box
-                raise serializers.ValidationError({"price": "price is required for product_type 'box'."})
-            if perfume_id:
-                raise serializers.ValidationError({"perfume_id": "perfume_id should not be provided for product_type 'box'."})
-            data.pop('decant_size', None) # Ensure decant_size is not for box type here
-        else:
-            raise serializers.ValidationError({"product_type": "Invalid product_type."})
+        # Ensure no disallowed fields are present (they are commented out in serializer definition but good to double check)
+        if data.get('perfume_id'):
+            raise serializers.ValidationError({"perfume_id": "perfume_id is not allowed at the top level for cart items. Specify perfumes within box_configuration."})
+        if data.get('decant_size'):
+            raise serializers.ValidationError({"decant_size": "decant_size is not allowed at the top level. Specify decant_size within box_configuration."})
+
         return data
 
 # --- Cart Serializers ---
@@ -185,47 +192,55 @@ class PerfumeSummarySerializer(serializers.ModelSerializer):
 
 class CartItemSerializer(serializers.ModelSerializer):
     """ Serializer for displaying items within a cart. """
-    # Use nested serializer for perfume details on read
-    perfume = PerfumeSummarySerializer(read_only=True)
-    # Add a write-only field to accept perfume ID on creation/update (handled in view/specific serializer)
-    perfume_id = serializers.PrimaryKeyRelatedField(
-        queryset=Perfume.objects.all(), source='perfume', write_only=True, required=False, allow_null=True
-    )
-    # Calculate item total price (consider adding this if needed)
+    # Use nested serializer for perfume details on read - this 'perfume' field might be misleading now.
+    # The CartItem model's 'perfume' ForeignKey should be nullable and likely unused if all items are boxes.
+    perfume = PerfumeSummarySerializer(read_only=True, allow_null=True) # This refers to the direct FK on CartItem model
+    # perfume_id is no longer a top-level write field for CartItem, as items are always boxes.
+    # The actual perfumes are detailed within box_configuration.
+
     # item_total = serializers.SerializerMethodField()
 
     class Meta:
-      model = CartItem # Use direct model import
+      model = CartItem
       fields = (
-        'id', 'product_type', 'perfume', 'perfume_id', 'quantity',
-        'decant_size', 'price_at_addition', 'box_configuration', 'added_at'
-        # 'item_total'
+        'id', 'product_type', # product_type will always be 'box'
+        'perfume', # This field on CartItem model should be null for boxes.
+        'quantity', # Quantity of boxes
+        'price_at_addition', # Price of the box
+        'box_configuration', # Details of the box (perfumes, decant_size, decant_count)
+        'added_at',
+        'name', # Name of the box, e.g., "AI Discovery Box (4x5ml)"
+        # 'decant_size' is removed from here; it's inside box_configuration.
+        # 'perfume_id' (as a direct write field) is removed.
       )
-      read_only_fields = ('id', 'price_at_addition', 'added_at') # Price is set on addition
-
-      # def get_item_total(self, obj):
-    #     # Basic calculation, might need refinement based on decant_size, box config etc.
-    #     if obj.perfume and obj.price_at_addition:
-    #         return obj.quantity * obj.price_at_addition # Or calculate based on price_per_ml * decant_size?
-    #     # Add logic for box pricing if applicable
-    #     return None
+      read_only_fields = ('id', 'price_at_addition', 'added_at', 'perfume') # perfume is read-only as it's not set directly for boxes
 
     def validate(self, data):
         """
-        Validate based on product_type.
+        Validate based on product_type. Since only 'box' is allowed,
+        this validation simplifies.
         """
-        product_type = data.get('product_type', self.instance.product_type if self.instance else 'perfume')
-        perfume = data.get('perfume', None) # Note: source='perfume' maps perfume_id here
-        box_configuration = data.get('box_configuration', None)
+        # Instance product_type or default to 'box' if creating
+        product_type = data.get('product_type', getattr(self.instance, 'product_type', 'box'))
 
-        if product_type == 'perfume' and not perfume:
-            raise serializers.ValidationError({"perfume_id": "Perfume must be selected for product_type 'perfume'."})
-        if product_type == 'box' and not box_configuration:
-            # Decide if box_configuration is mandatory on creation/update
-            # raise serializers.ValidationError({"box_configuration": "Box configuration must be provided for product_type 'box'."})
-            pass
-        if product_type == 'box' and perfume:
-            raise serializers.ValidationError({"perfume_id": "Perfume should not be set for product_type 'box'."})
+        if product_type != 'box':
+            # This case should ideally be prevented by CartItemAddSerializer,
+            # but good to have a check here too if CartItemSerializer is used for updates.
+            raise serializers.ValidationError({"product_type": "Only 'box' product_type is allowed in the cart."})
+
+        box_configuration = data.get('box_configuration')
+        if not box_configuration: # For 'box' type, box_configuration is essential.
+            raise serializers.ValidationError({"box_configuration": "Box configuration must be provided for product_type 'box'."})
+
+        # Ensure the direct 'perfume' field (FK on CartItem model) is not set if it's a box.
+        # The actual perfumes are in box_configuration.
+        # If 'perfume' (the FK) is part of `data` and not None, it's an issue.
+        if data.get('perfume') is not None:
+             raise serializers.ValidationError({"perfume": "The direct 'perfume' field should not be set for 'box' type items. Perfumes are detailed in 'box_configuration'."})
+
+        # Ensure 'name' is present for boxes
+        if not data.get('name'):
+            raise serializers.ValidationError({"name": "A 'name' is required for box items."})
 
         return data
 
