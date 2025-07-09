@@ -1,23 +1,19 @@
 from djoser.serializers import UserCreateSerializer as BaseUserCreateSerializer
 from djoser.serializers import UserSerializer as BaseUserSerializer
 from rest_framework import serializers
-from .models import ( # Add Cart, CartItem, PredefinedBox, SubscriptionTier, UserSubscription, Order, OrderItem, Rating, Favorite, Note, Coupon
+from .models import (
     Brand, Occasion, Accord, Perfume, SurveyResponse, UserPerfumeMatch,
     Cart, CartItem, PredefinedBox, SubscriptionTier, UserSubscription,
     Order, OrderItem, Rating, Favorite, Note, Coupon
 )
 from django.contrib.auth import get_user_model
 
-User = get_user_model() # Get the custom User model defined in settings.AUTH_USER_MODEL
+User = get_user_model()
 
 class UserCreateSerializer(BaseUserCreateSerializer):
-    """
-    Serializer for creating users with optional username.
-    """
-    username = serializers.CharField(required=False)  # Make username optional
+    username = serializers.CharField(required=False)
 
     def create(self, validated_data):
-        # If username is not provided, use the first part of email as username
         if 'username' not in validated_data:
             email = validated_data.get('email')
             username = email.split('@')[0]
@@ -29,14 +25,9 @@ class UserCreateSerializer(BaseUserCreateSerializer):
         fields = ('id', 'email', 'username', 'password', 'phone', 'address')
 
 class UserSerializer(BaseUserSerializer):
-    """
-    Serializer for retrieving and updating user details (excluding sensitive info like password).
-    """
     class Meta(BaseUserSerializer.Meta):
         model = User
-        # Specify fields available when viewing/updating user profile
         fields = ('id', 'email', 'username', 'phone', 'address', 'first_name', 'last_name', 'is_active', 'is_staff', 'date_joined')
-        # Prevent changing email via this serializer easily after creation
         read_only_fields = ('email', 'date_joined', 'is_active', 'is_staff')
 
 class BrandSerializer(serializers.ModelSerializer):
@@ -60,73 +51,53 @@ class NoteSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class PerfumeSerializer(serializers.ModelSerializer):
-    # Use StringRelatedField for readable representation of related objects
     brand = serializers.StringRelatedField()
     occasions = serializers.StringRelatedField(many=True)
     accords = serializers.StringRelatedField(many=True)
-    # Add notes as string representations
     top_notes = serializers.StringRelatedField(many=True)
     middle_notes = serializers.StringRelatedField(many=True)
     base_notes = serializers.StringRelatedField(many=True)
-    # Add personalized match percentage field
     match_percentage = serializers.SerializerMethodField()
-    best_for = serializers.SerializerMethodField() # Add SerializerMethodField for best_for
+    best_for = serializers.SerializerMethodField()
 
     class Meta:
         model = Perfume
-        # Include all relevant fields for the perfume catalog, plus the new match field and other added fields
         fields = (
             'id', 'external_id', 'name', 'brand', 'description',
             'top_notes', 'middle_notes', 'base_notes',
             'accords', 'occasions',
-            'gender', 'season', 'best_for', 'year_released', 'country_origin', # Keep original best_for in fields for now, will be handled by get_best_for
+            'gender', 'season', 'best_for', 'year_released', 'country_origin',
             'price_per_ml', 'thumbnail_url', 'full_size_url',
             'overall_rating', 'rating_count', 'longevity_rating', 'sillage_rating', 'price_value_rating',
             'popularity',
-            'similar_perfume_ids', 'recommended_perfume_ids', # Note: These expose external IDs
+            'similar_perfume_ids', 'recommended_perfume_ids',
             'match_percentage'
         )
 
     def get_match_percentage(self, obj):
-        """
-        Calculates the match percentage for the current user and perfume.
-        Returns the percentage (Decimal) or None if user is not authenticated
-        or no match exists.
-        """
         user = self.context['request'].user
         if user.is_authenticated:
             try:
                 match = UserPerfumeMatch.objects.get(user=user, perfume=obj)
-                return match.match_percentage # Returns Decimal or None
+                return match.match_percentage
             except UserPerfumeMatch.DoesNotExist:
                 return None
         return None
 
     def get_best_for(self, obj):
-        """
-        Returns 'both' if best_for is null or empty, otherwise returns the original value.
-        """
         if obj.best_for is None or obj.best_for == '':
             return 'both'
         return obj.best_for
 
 
 class SurveyResponseSerializer(serializers.ModelSerializer):
-    """
-    Serializer for submitting and viewing survey responses.
-    The 'user' field is automatically set to the authenticated user during creation.
-    """
-    # Make user read-only in the serializer context, it will be set in the view
     user = serializers.PrimaryKeyRelatedField(read_only=True)
-    # Allow response_data to be written
     response_data = serializers.JSONField()
-    # completed_at is read-only as it's set automatically on creation
     completed_at = serializers.DateTimeField(read_only=True)
 
     class Meta:
         model = SurveyResponse
         fields = ('user', 'response_data', 'completed_at')
-        # Explicitly state read_only fields for clarity, though PrimaryKeyRelatedField(read_only=True) handles 'user'
         read_only_fields = ('user', 'completed_at')
 
 
@@ -134,14 +105,11 @@ class SurveyResponseSerializer(serializers.ModelSerializer):
 
 
 class CartItemAddSerializer(serializers.Serializer):
-    """Serializer for adding items (boxes with decants) to the cart. Individual perfumes are not allowed."""
-    product_type = serializers.ChoiceField(choices=[('box', 'Box')]) # Only 'box' is allowed
-    # perfume_id = serializers.PrimaryKeyRelatedField(queryset=Perfume.objects.all(), required=False, allow_null=True) # Removed, perfumes are in box_configuration
-    quantity = serializers.HiddenField(default=1) # Each box added is unique, quantity is always 1
-    # decant_size = serializers.IntegerField(required=False, allow_null=True) # Removed, decant size is in box_configuration
-    box_configuration = serializers.JSONField(required=True) # For boxes, this is mandatory
-    name = serializers.CharField(max_length=255, required=True) # For box name, e.g., "AI Discovery Box (4x5ml)"
-    price = serializers.DecimalField(max_digits=10, decimal_places=2, required=True) # For box price
+    product_type = serializers.ChoiceField(choices=[('box', 'Box')])
+    quantity = serializers.HiddenField(default=1)
+    box_configuration = serializers.JSONField(required=True)
+    name = serializers.CharField(max_length=255, required=True)
+    price = serializers.DecimalField(max_digits=10, decimal_places=2, required=True)
 
     def validate_product_type(self, value):
         if value != 'box':
@@ -160,20 +128,15 @@ class CartItemAddSerializer(serializers.Serializer):
         if 'decant_count' not in value or not isinstance(value['decant_count'], int):
             raise serializers.ValidationError("box_configuration must contain an integer 'decant_count'.")
 
-        # Validate each perfume entry in the box_configuration
         for perfume_entry in value['perfumes']:
             if not isinstance(perfume_entry, dict):
                 raise serializers.ValidationError("Each item in 'perfumes' list must be a JSON object.")
-            if 'perfume_id_backend' not in perfume_entry and 'external_id' not in perfume_entry : # Check for one of the identifiers
+            if 'perfume_id_backend' not in perfume_entry and 'external_id' not in perfume_entry :
                  raise serializers.ValidationError("Each perfume in box_configuration must have 'perfume_id_backend' or 'external_id'.")
-            # Add more validation for perfume_entry if needed (e.g., name, brand)
         return value
 
     def validate(self, data):
-        # product_type is already validated by validate_product_type
-        # box_configuration is already validated by validate_box_configuration
 
-        # Ensure no disallowed fields are present (they are commented out in serializer definition but good to double check)
         if data.get('perfume_id'):
             raise serializers.ValidationError({"perfume_id": "perfume_id is not allowed at the top level for cart items. Specify perfumes within box_configuration."})
         if data.get('decant_size'):
@@ -184,61 +147,41 @@ class CartItemAddSerializer(serializers.Serializer):
 # --- Cart Serializers ---
 
 class PerfumeSummarySerializer(serializers.ModelSerializer):
-    """ Minimal serializer for representing perfumes within cart items. """
     brand = serializers.StringRelatedField()
     class Meta:
         model = Perfume
-        fields = ('id', 'name', 'brand', 'thumbnail_url', 'price_per_ml', 'external_id') # Added external_id for consistency
+        fields = ('id', 'name', 'brand', 'thumbnail_url', 'price_per_ml', 'external_id')
 
 class CartItemSerializer(serializers.ModelSerializer):
-    """ Serializer for displaying items within a cart. """
-    # Use nested serializer for perfume details on read - this 'perfume' field might be misleading now.
-    # The CartItem model's 'perfume' ForeignKey should be nullable and likely unused if all items are boxes.
-    perfume = PerfumeSummarySerializer(read_only=True, allow_null=True) # This refers to the direct FK on CartItem model
-    # perfume_id is no longer a top-level write field for CartItem, as items are always boxes.
-    # The actual perfumes are detailed within box_configuration.
+    perfume = PerfumeSummarySerializer(read_only=True, allow_null=True)
 
-    # item_total = serializers.SerializerMethodField()
 
     class Meta:
       model = CartItem
       fields = (
-        'id', 'product_type', # product_type will always be 'box'
-        'perfume', # This field on CartItem model should be null for boxes.
-        'quantity', # Quantity of boxes
-        'price_at_addition', # Price of the box
-        'box_configuration', # Details of the box (perfumes, decant_size, decant_count)
+        'id', 'product_type',
+        'perfume',
+        'quantity',
+        'price_at_addition',
+        'box_configuration',
         'added_at',
-        'name', # Name of the box, e.g., "AI Discovery Box (4x5ml)"
-        # 'decant_size' is removed from here; it's inside box_configuration.
-        # 'perfume_id' (as a direct write field) is removed.
+        'name',
       )
-      read_only_fields = ('id', 'price_at_addition', 'added_at', 'perfume') # perfume is read-only as it's not set directly for boxes
+      read_only_fields = ('id', 'price_at_addition', 'added_at', 'perfume')
 
     def validate(self, data):
-        """
-        Validate based on product_type. Since only 'box' is allowed,
-        this validation simplifies.
-        """
-        # Instance product_type or default to 'box' if creating
         product_type = data.get('product_type', getattr(self.instance, 'product_type', 'box'))
 
         if product_type != 'box':
-            # This case should ideally be prevented by CartItemAddSerializer,
-            # but good to have a check here too if CartItemSerializer is used for updates.
             raise serializers.ValidationError({"product_type": "Only 'box' product_type is allowed in the cart."})
 
         box_configuration = data.get('box_configuration')
-        if not box_configuration: # For 'box' type, box_configuration is essential.
+        if not box_configuration:
             raise serializers.ValidationError({"box_configuration": "Box configuration must be provided for product_type 'box'."})
 
-        # Ensure the direct 'perfume' field (FK on CartItem model) is not set if it's a box.
-        # The actual perfumes are in box_configuration.
-        # If 'perfume' (the FK) is part of `data` and not None, it's an issue.
         if data.get('perfume') is not None:
              raise serializers.ValidationError({"perfume": "The direct 'perfume' field should not be set for 'box' type items. Perfumes are detailed in 'box_configuration'."})
 
-        # Ensure 'name' is present for boxes
         if not data.get('name'):
             raise serializers.ValidationError({"name": "A 'name' is required for box items."})
 
@@ -246,34 +189,23 @@ class CartItemSerializer(serializers.ModelSerializer):
 
 
 class CartSerializer(serializers.ModelSerializer):
-    """ Serializer for the user's shopping cart. """
-    user = UserSerializer(read_only=True) # Display user details
-    items = CartItemSerializer(many=True, read_only=True) # Nested list of cart items
-    # Add calculated total field if needed
-    # cart_total = serializers.SerializerMethodField()
+    user = UserSerializer(read_only=True)
+    items = CartItemSerializer(many=True, read_only=True)
 
     class Meta:
       model = Cart # Use direct model import
-      fields = ('id', 'user', 'items', 'created_at', 'updated_at') # Add 'cart_total' if implemented
+      fields = ('id', 'user', 'items', 'created_at', 'updated_at')
       read_only_fields = ('id', 'user', 'created_at', 'updated_at', 'items')
 
-    # def get_cart_total(self, obj):
-    #     # Sum up item totals - requires item_total on CartItemSerializer
-    #     total = sum(item.quantity * item.price_at_addition for item in obj.items.all() if item.price_at_addition is not None)
-    #     # Add logic for box pricing if needed
-    #     return total
 
 # --- Box Serializers ---
 
 class PredefinedBoxSerializer(serializers.ModelSerializer):
-    """ Serializer for predefined boxes. """
-    # Use the summary serializer for nested perfume representation
     perfumes = PerfumeSummarySerializer(many=True, read_only=True)
 
     class Meta:
         model = PredefinedBox
-        fields = ('id', 'title', 'description', 'icon', 'gender', 'perfumes') # Added icon, gender, corrected name->title
-        # Add other fields like price, image_url if they are added to the model
+        fields = ('id', 'title', 'description', 'icon', 'gender', 'perfumes')
 
 # --- End Box Serializers ---
 
@@ -281,29 +213,21 @@ class PredefinedBoxSerializer(serializers.ModelSerializer):
 # --- Subscription Serializers ---
 
 class SubscriptionTierSerializer(serializers.ModelSerializer):
-    """ Serializer for displaying subscription tiers. """
     class Meta:
         model = SubscriptionTier
         fields = ('id', 'name', 'price', 'decant_size', 'perfume_criteria', 'description')
-        # Typically read-only for listing tiers
         read_only_fields = fields
 
 class UserSubscriptionSerializer(serializers.ModelSerializer):
-    """ Serializer for displaying the user's current subscription status. """
-    # Use nested serializer for tier details
     tier = SubscriptionTierSerializer(read_only=True)
-    # User is implicitly the request user, not shown directly unless needed
-    # user = UserSerializer(read_only=True)
 
     class Meta:
         model = UserSubscription
         fields = ('id', 'tier', 'start_date', 'is_active')
-        read_only_fields = ('id', 'tier', 'start_date', 'is_active') # Status is read-only
+        read_only_fields = ('id', 'tier', 'start_date', 'is_active')
 
 class SubscribeSerializer(serializers.Serializer):
-    """ Serializer for the subscribe action. """
     tier_id = serializers.PrimaryKeyRelatedField(queryset=SubscriptionTier.objects.all(), required=True)
-    # Add fields for payment details later (e.g., payment_method_id)
 
 # --- End Subscription Serializers ---
 
@@ -311,8 +235,6 @@ class SubscribeSerializer(serializers.Serializer):
 # --- Order Serializers ---
 
 class OrderItemSerializer(serializers.ModelSerializer):
-    """ Serializer for displaying items within an order. """
-    # Use the summary serializer for perfume details if available
     perfume = PerfumeSummarySerializer(read_only=True)
 
     class Meta:
@@ -321,29 +243,22 @@ class OrderItemSerializer(serializers.ModelSerializer):
             'id', 'perfume', 'product_type', 'quantity', 'decant_size',
             'price_at_purchase', 'box_configuration', 'item_name', 'item_description'
         )
-        read_only_fields = fields # Order items are read-only representations
+        read_only_fields = fields
 
 class OrderSerializer(serializers.ModelSerializer):
-    """ Serializer for displaying order details. """
-    # Nested items using OrderItemSerializer
     items = OrderItemSerializer(many=True, read_only=True)
-    # Optionally display user email or use a nested UserSerializer
-    user_email = serializers.EmailField(source='user.email', read_only=True, allow_null=True) # Allow null if user is deleted
+    user_email = serializers.EmailField(source='user.email', read_only=True, allow_null=True)
 
     class Meta:
         model = Order
         fields = (
             'id', 'user_email', 'order_date', 'total_price', 'status',
             'shipping_address', 'items', 'updated_at'
-            # Add payment_details later if needed
         )
-        read_only_fields = fields # Orders are typically read-only once created via API
+        read_only_fields = fields
 
 class OrderCreateSerializer(serializers.Serializer):
-    """ Serializer for creating an order from the cart. """
-    # Expects shipping address, other details derived from cart/user
     shipping_address = serializers.CharField(required=True, allow_blank=False)
-    # Add payment details field later (e.g., payment_method_id)
 
 # --- End Order Serializers ---
 
@@ -351,27 +266,21 @@ class OrderCreateSerializer(serializers.Serializer):
 # --- Rating & Favorite Serializers ---
 
 class RatingSerializer(serializers.ModelSerializer):
-    """ Serializer for creating/updating/viewing a perfume rating. """
-    # User and Perfume are set implicitly or via URL, make read-only here
     user = serializers.PrimaryKeyRelatedField(read_only=True)
     perfume = serializers.PrimaryKeyRelatedField(read_only=True)
-    # Allow rating field to be written
     rating = serializers.IntegerField(min_value=1, max_value=5, required=True)
 
     class Meta:
         model = Rating
         fields = ('id', 'user', 'perfume', 'rating', 'timestamp')
-        read_only_fields = ('id', 'user', 'perfume', 'timestamp') # User/Perfume set in view
+        read_only_fields = ('id', 'user', 'perfume', 'timestamp')
 
     def validate_rating(self, value):
-        """ Ensure rating is within the allowed range (1-5). """
         if not (1 <= value <= 5):
             raise serializers.ValidationError("Rating must be between 1 and 5.")
         return value
 
 class FavoriteSerializer(serializers.ModelSerializer):
-    """ Serializer for creating a favorite relationship. """
-    # User is set implicitly, Perfume via request data
     user = serializers.PrimaryKeyRelatedField(read_only=True)
     perfume_id = serializers.PrimaryKeyRelatedField(
         queryset=Perfume.objects.all(), source='perfume', write_only=True
@@ -383,54 +292,40 @@ class FavoriteSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'user', 'added_at')
 
     def create(self, validated_data):
-        # Ensure user is set correctly during creation
         validated_data['user'] = self.context['request'].user
-        # Prevent duplicates using get_or_create
         favorite, created = Favorite.objects.get_or_create(
             user=validated_data['user'],
             perfume=validated_data['perfume'],
-            defaults={} # No extra defaults needed here
+            defaults={}
         )
         return favorite
 
 
 class FavoriteListSerializer(serializers.ModelSerializer):
-    """ Serializer specifically for listing favorites, showing perfume details. """
-    # Use nested serializer for perfume details
     perfume = PerfumeSummarySerializer(read_only=True)
 
     class Meta:
         model = Favorite
-        fields = ('id', 'perfume', 'added_at') # Show perfume details and when it was added
+        fields = ('id', 'perfume', 'added_at')
         read_only_fields = fields
 
 # --- End Rating & Favorite Serializers ---
 # --- Recommendation Serializer ---
 
 class UserPerfumeMatchSerializer(serializers.ModelSerializer):
-    """
-    Serializer for displaying user-perfume match scores, including perfume details.
-    Used for the /api/recommendations/ endpoint.
-    """
-    # Use the summary serializer for nested perfume representation
     perfume = PerfumeSummarySerializer(read_only=True)
-    # Rename match_percentage for clarity in API response
     score = serializers.DecimalField(source='match_percentage', max_digits=4, decimal_places=3, read_only=True)
 
     class Meta:
         model = UserPerfumeMatch
         fields = ('perfume', 'score', 'last_updated')
-        read_only_fields = fields # This data is read-only via the API
+        read_only_fields = fields
 
 # --- End Recommendation Serializer ---
 
 # --- Coupon Serializer ---
 
 class CouponSerializer(serializers.ModelSerializer):
-    """
-    Serializer for Coupon model.
-    Handles creation, retrieval, and updates of coupons.
-    """
     class Meta:
         model = Coupon
         fields = (
@@ -441,16 +336,9 @@ class CouponSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'uses_count', 'created_at', 'updated_at')
 
     def validate_code(self, value):
-        """
-        Ensure code is uppercase.
-        """
         return value.upper()
 
     def validate(self, data):
-        """
-        Validate discount_type and value.
-        """
-        # Access instance during updates
         instance = getattr(self, 'instance', None)
         discount_type = data.get('discount_type', instance.discount_type if instance else None)
         value = data.get('value', instance.value if instance else None)
@@ -462,7 +350,6 @@ class CouponSerializer(serializers.ModelSerializer):
             if value <= 0:
                 raise serializers.ValidationError({'value': 'Fixed discount value must be positive.'})
 
-        # Ensure min_purchase_amount is not negative if provided
         min_purchase_amount = data.get('min_purchase_amount')
         if min_purchase_amount is not None and min_purchase_amount < 0:
             raise serializers.ValidationError({'min_purchase_amount': 'Minimum purchase amount cannot be negative.'})

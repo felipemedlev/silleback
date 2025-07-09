@@ -25,6 +25,8 @@ urlpatterns = [
     path('survey/questions/<int:question_id>/', views.SurveyQuestionsView.as_view(), name='survey-questions-detail'),
     # Add path for perfume rating view (GET/POST)
     path('perfumes/<int:perfume_id>/rating/', views.PerfumeRatingView.as_view(), name='perfume-rating'),
+    # Add path for retrieving all user ratings
+    path('users/ratings/', views.UserRatingsView.as_view(), name='user-ratings'),
     # Add path for retrieving user recommendations
     path('recommendations/', views.RecommendationView.as_view(), name='user-recommendations'),
 
