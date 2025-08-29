@@ -201,12 +201,8 @@ DJOSER = {
 # Ensure Redis server is running (e.g., `redis-server` or via Docker)
 CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 
-# We don't strictly need a result backend for this specific task,
-# as results are stored in UserPerfumeMatch.
-# If you want general task tracking (e.g., in Django admin via django-celery-results),
-# configure it here:
-# CELERY_RESULT_BACKEND = 'django-db' # Requires django-celery-results setup
-# CELERY_CACHE_BACKEND = 'default' # If using django-cache backend
+# Configure result backend to use Redis (same as broker for simplicity)
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
 
 # Use JSON for serialization
 CELERY_ACCEPT_CONTENT = ['json']
