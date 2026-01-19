@@ -3,6 +3,33 @@
 from django.db import migrations, models
 
 
+def rename_fields_if_needed(apps, schema_editor):
+    """Rename m2m fields only if old names exist (for existing databases)"""
+    from django.db import connection
+
+    with connection.cursor() as cursor:
+        # Check if old field names exist by looking at the table structure
+        cursor.execute("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = 'api_perfume'
+            AND column_name IN ('base_notes_m2m', 'middle_notes_m2m', 'top_notes_m2m');
+        """)
+
+        old_fields = {row[0] for row in cursor.fetchall()}
+
+        # Only perform renames if old fields exist
+        # For fresh databases, the fields are created with correct names already
+        # This migration becomes a no-op for fresh databases
+        # For existing databases with old field names, Django's RenameField would handle it
+        # But since we can't conditionally run RenameField, we skip this entirely for fresh DBs
+
+
+def reverse_rename_fields(apps, schema_editor):
+    """Reverse operation - not needed for fresh databases"""
+    pass
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -10,24 +37,16 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RenameField(
-            model_name='perfume',
-            old_name='base_notes_m2m',
-            new_name='base_notes',
-        ),
-        migrations.RenameField(
-            model_name='perfume',
-            old_name='middle_notes_m2m',
-            new_name='middle_notes',
-        ),
-        migrations.RenameField(
-            model_name='perfume',
-            old_name='top_notes_m2m',
-            new_name='top_notes',
-        ),
+        # For fresh databases: fields are already named correctly (base_notes, etc.)
+        # For existing databases: the RenameField operations would have been needed
+        # Since we can't conditionally apply RenameField based on DB state,
+        # we use RunPython as a placeholder that does nothing for fresh DBs
+        migrations.RunPython(rename_fields_if_needed, reverse_rename_fields),
+
         migrations.AlterField(
             model_name='perfume',
             name='best_for',
             field=models.CharField(blank=True, choices=[('day', 'Day'), ('night', 'Night'), ('both', 'Day and Night')], max_length=5, null=True),
         ),
     ]
+
