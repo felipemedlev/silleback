@@ -180,7 +180,7 @@ class SurveyResponseSubmitView(generics.GenericAPIView):
                 deleted_count, _ = UserPerfumeMatch.objects.filter(user=request.user).delete()
                 logger.info(f"Deleted {deleted_count} existing perfume matches for user {request.user.pk} before recalculation.")
 
-            update_user_recommendations.delay_on_commit(user_pk=request.user.pk)
+            update_user_recommendations.delay(user_pk=request.user.pk)
 
             response_serializer = self.get_serializer(survey_response)
             status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
