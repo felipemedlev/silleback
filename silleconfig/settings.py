@@ -239,16 +239,10 @@ CELERY_RECOMMENDATION_ALPHA = float(os.environ.get('CELERY_RECOMMENDATION_ALPHA'
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0'),
-        'OPTIONS': {
-             # If using rediss:// (SSL), the verify_certs option might be needed depending on the client.
-             # Django's RedisCache uses redis-py. For Upstash, simple connection string often suffices,
-             # but explicit SSL options can be passed if needed.
-             # 'CONNECTION_POOL_KWARGS': {'ssl_cert_reqs': ssl.CERT_NONE} if 'rediss' in CELERY_BROKER_URL else {}
-        }
+        'LOCATION': os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/1'),
     }
 }
-# Add SSL options dynamically if needed
-if 'rediss' in CACHES['default']['LOCATION']:
-    CACHES['default']['OPTIONS']['CONNECTION_POOL_KWARGS'] = {'ssl_cert_reqs': ssl.CERT_NONE}
+# If using rediss, the client usually handles SSL based on the scheme.
+# Avoid passing CONNECTION_POOL_KWARGS which causes TypeError in newer redis-py versions with Django's RedisCache
+
 
