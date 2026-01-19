@@ -165,15 +165,21 @@ class SurveyResponseSubmitView(generics.GenericAPIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request, *args, **kwargs):
+        # Debug Logging
+        logger.info(f"Survey Submission Request: User={request.user}, IsAuth={request.user.is_authenticated}")
+        logger.info(f"Survey Submission Headers: Auth={request.headers.get('Authorization', 'None')}")
+
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         if request.user.is_authenticated:
+            logger.info(f"Processing authenticated survey for user {request.user.pk}")
             survey_response, created = SurveyResponse.objects.update_or_create(
                 user=request.user,
                 defaults={'response_data': serializer.validated_data['response_data']}
             )
 
+            logger.info(f"Survey saved in DB. Created={created}, ResponseID={survey_response.pk}")
             logger.info(f"Triggering recommendation update task for user {request.user.pk}")
 
             # Race condition fix: Do NOT synchronously delete existing matches.
@@ -188,6 +194,7 @@ class SurveyResponseSubmitView(generics.GenericAPIView):
             status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
             return Response(response_serializer.data, status=status_code)
         else:
+            logger.warning("Request processed as anonymous (not saving to DB)")
             return Response(serializer.validated_data, status=status.HTTP_200_OK)
 
 
