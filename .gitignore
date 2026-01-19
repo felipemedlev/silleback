@@ -52,4 +52,4 @@ coverage.xml
 .dmypy.json
 
 # Ruff / Flake8 / Linting
-*.lint
+*.lint*.sql
