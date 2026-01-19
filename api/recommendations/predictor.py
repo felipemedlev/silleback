@@ -92,11 +92,11 @@ def _get_user_survey_vector_and_gender(user: AbstractUser, all_accords: list):
         return None, None
 
 
-def _get_perfume_accord_data(all_accords: list):
+
+def _get_perfume_accord_data():
     """
     Fetches perfume data including IDs, gender, popularity, and their *ordered* accords.
     Creates a DataFrame and a *weighted* perfume-accord matrix based on accord order/predominance.
-    Uses the full list of `all_accords` for the matrix columns.
     """
     try:
         # Check cache
@@ -105,6 +105,9 @@ def _get_perfume_accord_data(all_accords: list):
         if cached_data:
             logger.info("Using cached perfume-accord matrix.")
             return cached_data
+
+        # Fetch distinct accord names for columns
+        all_accords = _get_all_accord_list()
 
         # Fetch all perfumes with necessary fields.
         # Prefetch related accords. IMPORTANT: Assumes the default ordering
@@ -190,24 +193,21 @@ def generate_recommendations(user: AbstractUser, alpha: float = 0.7):
     """
     logger.info(f"Starting recommendation generation for user {user.pk} (alpha={alpha}).")
 
-    # 1. Get the full list of all accords present in perfumes
-    all_accords = _get_all_accord_list()
-    if not all_accords:
-        logger.error("Failed to retrieve the list of all accords. Cannot generate recommendations.")
-        return None # Error logged in helper
+    # 1. Get perfume data and the full *weighted* accord matrix (Source of Truth for dimensions)
+    perfumes_df, accord_matrix_df = _get_perfume_accord_data()
+    if perfumes_df.empty or accord_matrix_df.empty:
+        logger.warning("Perfume data or the weighted accord matrix is empty. Cannot generate recommendations.")
+        return None
 
-    # 2. Get user's survey vector (aligned with all accords) and gender preference
+    # 2. Get the full list of all accords FROM the matrix columns to ensure alignment
+    all_accords = accord_matrix_df.columns.tolist()
+
+    # 3. Get user's survey vector (aligned with all accords) and gender preference
     user_survey_vector, user_gender = _get_user_survey_vector_and_gender(user, all_accords)
     if user_survey_vector is None or user_gender is None:
         # Error logged in helper, or user has no survey/gender pref
         logger.warning(f"Could not retrieve survey vector or gender for user {user.pk}.")
         return None
-
-    # 3. Get perfume data and the full *weighted* accord matrix
-    perfumes_df, accord_matrix_df = _get_perfume_accord_data(all_accords)
-    if perfumes_df.empty or accord_matrix_df.empty:
-        logger.warning("Perfume data or the weighted accord matrix is empty. Cannot generate recommendations.")
-        return None # Error logged in helper
 
     # 4. Filter Perfumes by Gender
     logger.info(f"Filtering perfumes by user gender preference: '{user_gender}'")
