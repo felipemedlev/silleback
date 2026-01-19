@@ -3,33 +3,77 @@
 from django.db import migrations
 
 
+def rename_tables_if_exist(apps, schema_editor):
+    """Rename m2m tables only if they exist (for existing databases)"""
+    with schema_editor.connection.cursor() as cursor:
+        # Check and rename top_notes table
+        cursor.execute("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = 'api_perfume_top_notes_m2m'
+            );
+        """)
+        if cursor.fetchone()[0]:
+            cursor.execute('ALTER TABLE api_perfume_top_notes_m2m RENAME TO api_perfume_top_notes;')
+
+        # Check and rename middle_notes table
+        cursor.execute("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = 'api_perfume_middle_notes_m2m'
+            );
+        """)
+        if cursor.fetchone()[0]:
+            cursor.execute('ALTER TABLE api_perfume_middle_notes_m2m RENAME TO api_perfume_middle_notes;')
+
+        # Check and rename base_notes table
+        cursor.execute("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = 'api_perfume_base_notes_m2m'
+            );
+        """)
+        if cursor.fetchone()[0]:
+            cursor.execute('ALTER TABLE api_perfume_base_notes_m2m RENAME TO api_perfume_base_notes;')
+
+
+def reverse_rename_tables(apps, schema_editor):
+    """Reverse the rename operation"""
+    with schema_editor.connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = 'api_perfume_top_notes'
+            );
+        """)
+        if cursor.fetchone()[0]:
+            cursor.execute('ALTER TABLE api_perfume_top_notes RENAME TO api_perfume_top_notes_m2m;')
+
+        cursor.execute("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = 'api_perfume_middle_notes'
+            );
+        """)
+        if cursor.fetchone()[0]:
+            cursor.execute('ALTER TABLE api_perfume_middle_notes RENAME TO api_perfume_middle_notes_m2m;')
+
+        cursor.execute("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = 'api_perfume_base_notes'
+            );
+        """)
+        if cursor.fetchone()[0]:
+            cursor.execute('ALTER TABLE api_perfume_base_notes RENAME TO api_perfume_base_notes_m2m;')
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
         ('api', '0013_auto_20250418_1623'),
     ]
 
-    # SQL-based migration to manually rename the through tables while preserving data
-
     operations = [
-        # This migration just performs SQL operations to rename the through tables
-        # while keeping all data intact
-
-        migrations.RunSQL(
-            # Forward SQL - rename tables and update constraints
-            [
-                # Rename the through table from [app]_perfume_top_notes_m2m to [app]_perfume_top_notes
-                'ALTER TABLE api_perfume_top_notes_m2m RENAME TO api_perfume_top_notes;',
-                # Rename the through table from [app]_perfume_middle_notes_m2m to [app]_perfume_middle_notes
-                'ALTER TABLE api_perfume_middle_notes_m2m RENAME TO api_perfume_middle_notes;',
-                # Rename the through table from [app]_perfume_base_notes_m2m to [app]_perfume_base_notes
-                'ALTER TABLE api_perfume_base_notes_m2m RENAME TO api_perfume_base_notes;',
-            ],
-            # Reverse SQL - revert the renames
-            [
-                'ALTER TABLE api_perfume_top_notes RENAME TO api_perfume_top_notes_m2m;',
-                'ALTER TABLE api_perfume_middle_notes RENAME TO api_perfume_middle_notes_m2m;',
-                'ALTER TABLE api_perfume_base_notes RENAME TO api_perfume_base_notes_m2m;',
-            ]
-        ),
+        migrations.RunPython(rename_tables_if_exist, reverse_rename_tables),
     ]
