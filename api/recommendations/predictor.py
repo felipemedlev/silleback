@@ -2,127 +2,173 @@ import pandas as pd
 import numpy as np
 import logging
 from decimal import Decimal
+import pickle
+import zlib
+from functools import lru_cache
 
-# Django imports (assuming this file is within the Django project structure)
+# Django imports
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AbstractUser
 from ..models import Perfume, SurveyResponse, SurveyQuestion, Accord, UserPerfumeMatch
 from django.core.cache import cache
+from django.db.models import Prefetch
 
 # Setup logger
 logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
-# --- Database Interaction Functions ---
+# --- In-Memory Cache Layer (reduces Redis calls) ---
+# Use LRU cache for frequently accessed data within same process/request
+@lru_cache(maxsize=128)
+def _get_cached_accord_list():
+    """Memory-cached accord list to avoid repeated Redis/DB calls."""
+    cache_key = 'accord_list_v1'
+    cached = cache.get(cache_key)
+
+    if cached:
+        return cached
+
+    # Fetch from DB
+    all_accords = list(
+        Accord.objects.filter(perfumes__isnull=False)
+        .distinct()
+        .order_by('name')
+        .values_list('name', flat=True)
+    )
+    all_accords_lower = [name.lower() for name in all_accords if name]
+
+    if all_accords_lower:
+        # Cache for 7 days (accords rarely change)
+        cache.set(cache_key, all_accords_lower, timeout=60*60*24*7)
+        logger.info(f"Cached {len(all_accords_lower)} accords")
+
+    return all_accords_lower
 
 def _get_all_accord_list():
     """
-    Fetches ALL distinct accord names associated with any Perfume, in a consistent order (by name).
-    This defines the columns/dimensions of the full accord matrix.
+    Fetches ALL distinct accord names with aggressive caching.
     """
     try:
-        # Fetch distinct accord names linked to perfumes, ordered by name for consistency
-        all_accords = list(Accord.objects.filter(perfumes__isnull=False).distinct().order_by('name').values_list('name', flat=True))
-        # Convert to lowercase for consistency
-        all_accords_lower = [name.lower() for name in all_accords if name]
+        all_accords = _get_cached_accord_list()
 
-        if not all_accords_lower:
+        if not all_accords:
             logger.warning("No accords found associated with any perfumes in the database.")
             return []
 
-        logger.info(f"Fetched {len(all_accords_lower)} distinct accord names associated with perfumes.")
-        return all_accords_lower
+        logger.info(f"Fetched {len(all_accords)} distinct accord names.")
+        return all_accords
     except Exception as e:
         logger.error(f"Error fetching full accord list: {e}", exc_info=True)
         return []
 
+def _compress_data(data):
+    """Compress data for Redis storage."""
+    return zlib.compress(pickle.dumps(data), level=6)
+
+def _decompress_data(compressed):
+    """Decompress data from Redis."""
+    return pickle.loads(zlib.decompress(compressed))
+
 def _get_user_survey_vector_and_gender(user: AbstractUser, all_accords: list):
     """
-    Fetches the user's survey response, extracts gender preference,
-    and creates the survey vector aligned with the *all_accords* list.
-    Assigns neutral preference (0.0) for non-surveyed accords.
+    Fetches user survey with caching to reduce DB hits.
     """
+    # Cache user survey data (relatively static)
+    cache_key = f'user_survey_{user.pk}_v1'
+    cached = cache.get(cache_key)
+
+    if cached:
+        try:
+            return _decompress_data(cached)
+        except Exception as e:
+            logger.warning(f"Cache decompression failed for user {user.pk}: {e}")
+
     try:
         survey_response = SurveyResponse.objects.get(user=user)
         response_data = survey_response.response_data or {}
 
-        # Extract gender (case-insensitive)
         user_gender = response_data.get('gender', '').lower()
         if not user_gender:
-            logger.warning(f"Gender preference not found in survey response for user {user.pk}.")
-            user_gender = None # Or default to 'unisex'? For now, None.
+            logger.warning(f"Gender preference not found for user {user.pk}.")
+            user_gender = None
 
-        # Get the set of accords the user actually rated in the survey
-        # This assumes survey response keys match accord names (lowercase)
         surveyed_accords_set = {key.lower() for key in response_data.keys() if key.lower() in all_accords}
-        logger.info(f"User {user.pk} rated {len(surveyed_accords_set)} accords in their survey.")
+        logger.info(f"User {user.pk} rated {len(surveyed_accords_set)} accords.")
 
-        # Create survey vector aligned with all_accords
-        user_survey_vector = np.zeros(len(all_accords))
+        user_survey_vector = np.zeros(len(all_accords), dtype=np.float32)  # Use float32 to reduce size
         for i, accord_name in enumerate(all_accords):
             if accord_name in surveyed_accords_set:
-                # Accord was surveyed, use the user's rating
-                rating = response_data.get(accord_name, 0) # Use .get for safety, though it should be present
+                rating = response_data.get(accord_name, 0)
                 try:
                     rating_float = float(rating)
-                    if rating_float == -1: # "I don't know" maps to neutral 0
+                    if rating_float == -1:
                         user_survey_vector[i] = 0.0
-                    elif 0 <= rating_float <= 5: # Map 0-5 to -2.5 to +2.5
+                    elif 0 <= rating_float <= 5:
                         user_survey_vector[i] = rating_float - 2.5
                     else:
-                        logger.warning(f"Invalid rating '{rating}' for surveyed accord '{accord_name}' for user {user.pk}. Using neutral 0.")
+                        logger.warning(f"Invalid rating '{rating}' for accord '{accord_name}' for user {user.pk}.")
                         user_survey_vector[i] = 0.0
                 except (ValueError, TypeError):
-                     logger.warning(f"Non-numeric rating '{rating}' for surveyed accord '{accord_name}' for user {user.pk}. Using neutral 0.")
+                     logger.warning(f"Non-numeric rating '{rating}' for accord '{accord_name}' for user {user.pk}.")
                      user_survey_vector[i] = 0.0
             else:
-                # Accord exists in perfumes but was not surveyed by this user
-                # Assign neutral preference (0.0 on the centered scale)
                 user_survey_vector[i] = 0.0
 
-        logger.info(f"Generated survey vector (size {len(all_accords)}) for user {user.pk}. Gender: {user_gender}")
-        return user_survey_vector, user_gender
+        result = (user_survey_vector, user_gender)
+
+        # Cache compressed survey data for 30 days (surveys rarely change)
+        try:
+            cache.set(cache_key, _compress_data(result), timeout=60*60*24*30)
+        except Exception as e:
+            logger.warning(f"Failed to cache user survey: {e}")
+
+        logger.info(f"Generated survey vector for user {user.pk}. Gender: {user_gender}")
+        return result
 
     except SurveyResponse.DoesNotExist:
-        logger.warning(f"SurveyResponse not found for user {user.pk}. Cannot generate recommendations.")
+        logger.warning(f"SurveyResponse not found for user {user.pk}.")
         return None, None
     except Exception as e:
         logger.error(f"Error fetching user survey vector for user {user.pk}: {e}", exc_info=True)
         return None, None
 
 
-
 def _get_perfume_accord_data():
     """
-    Fetches perfume data including IDs, gender, popularity, and their *ordered* accords.
-    Creates a DataFrame and a *weighted* perfume-accord matrix based on accord order/predominance.
+    Optimized perfume data fetching with compressed caching.
     """
     try:
-        # Check cache
-        cache_key = 'perfume_accord_matrix_data'
-        cached_data = cache.get(cache_key)
-        if cached_data:
-            logger.info("Using cached perfume-accord matrix.")
-            return cached_data
+        cache_key = 'perfume_accord_matrix_v2'
+        cached = cache.get(cache_key)
 
-        # Fetch distinct accord names for columns
+        if cached:
+            try:
+                logger.info("Using cached perfume-accord matrix (compressed).")
+                return _decompress_data(cached)
+            except Exception as e:
+                logger.warning(f"Cache decompression failed: {e}")
+
         all_accords = _get_all_accord_list()
 
-        # Fetch all perfumes with necessary fields.
-        # Prefetch related accords. IMPORTANT: Assumes the default ordering
-        # of the related 'accords' reflects their predominance. If an explicit
-        # 'order' field exists on the through model (e.g., PerfumeAccord),
-        # it should be used in an .order_by() clause on the prefetch.
-        perfumes = Perfume.objects.prefetch_related('accords').all()
+        # Optimized query: select only needed fields
+        perfumes = Perfume.objects.prefetch_related(
+            Prefetch('accords', queryset=Accord.objects.only('name'))
+        ).only(
+            'id', 'external_id', 'name', 'gender',
+            'popularity', 'rating_count', 'overall_rating'
+        )
 
-        if not perfumes:
+        if not perfumes.exists():
             logger.warning("No perfumes found in the database.")
             return pd.DataFrame(), pd.DataFrame()
 
         perfume_data = []
-        # Store accords as an ordered list: {perfume_id: [ordered_accord_names]}
         perfume_accords_map = {}
+
+        # Not using iterator() to ensure prefetch_related works efficiently.
+        # Loading all into memory is acceptable as we build a DataFrame anyway.
+        perfume_count = 0
 
         for p in perfumes:
             perfume_data.append({
@@ -134,188 +180,148 @@ def _get_perfume_accord_data():
                 'rating_count': p.rating_count if p.rating_count is not None else 0,
                 'overall_rating': p.overall_rating if p.overall_rating is not None else 0,
             })
-            # Retrieve accords in the order provided by the ORM/prefetch
             ordered_perfume_accords = [a.name.lower() for a in p.accords.all() if a.name]
             perfume_accords_map[p.id] = ordered_perfume_accords
+            perfume_count += 1
+
+        logger.info(f"Processed {perfume_count} perfumes")
 
         perfumes_df = pd.DataFrame(perfume_data)
         if perfumes_df.empty:
-            logger.warning("Perfume DataFrame is empty after processing queryset.")
+            logger.warning("Perfume DataFrame is empty after processing.")
             return pd.DataFrame(), pd.DataFrame()
 
         perfumes_df.set_index('perfume_id', inplace=True)
 
-        # Create the full perfume-accord matrix (weighted by order)
-        # Initialize with zeros, using all_accords as columns
-        accord_matrix_df = pd.DataFrame(0.0, index=perfumes_df.index, columns=all_accords) # Use float for weights
+        # Create sparse-friendly matrix (use float32 to reduce size)
+        accord_matrix_df = pd.DataFrame(
+            0.0,
+            index=perfumes_df.index,
+            columns=all_accords,
+            dtype=np.float32  # Half the size of float64
+        )
 
-        # Populate the matrix with weights
+        # Populate matrix with weights
         for perfume_id, ordered_perfume_accords in perfume_accords_map.items():
             if perfume_id in accord_matrix_df.index:
                 for idx, accord_name in enumerate(ordered_perfume_accords):
                     if accord_name in accord_matrix_df.columns:
-                        # Apply weighting scheme: 1.0, 0.8, 0.6, 0.4, 0.2, then 0.1 for subsequent
-                        # Limit index to avoid negative weights if many accords
-                        weight_index = min(idx, 5) # 0, 1, 2, 3, 4 map to 1.0->0.2, 5+ maps to 0.1
-                        if weight_index < 5:
-                             weight = 1.0 - (0.2 * weight_index)
-                        else:
-                             weight = 0.1
-                        # Assign the calculated weight
+                        weight_index = min(idx, 5)
+                        weight = 1.0 - (0.2 * weight_index) if weight_index < 5 else 0.1
                         accord_matrix_df.loc[perfume_id, accord_name] = weight
-                    # else: accord exists for perfume but not in the global 'all_accords' list (shouldn't happen with current logic)
 
-        logger.info(f"Created perfume DataFrame ({len(perfumes_df)} perfumes) and weighted accord matrix ({accord_matrix_df.shape}).")
+        logger.info(f"Created perfume DataFrame ({len(perfumes_df)}) and accord matrix ({accord_matrix_df.shape}).")
 
-        # Cache the result for 24 hours
-        cache.set(cache_key, (perfumes_df, accord_matrix_df), timeout=60*60*24)
+        result = (perfumes_df, accord_matrix_df)
 
-        return perfumes_df, accord_matrix_df
+        # Cache compressed data for 6 hours (balance between freshness and cache hits)
+        try:
+            compressed = _compress_data(result)
+            cache.set(cache_key, compressed, timeout=60*60*6)
+            logger.info(f"Cached perfume data (compressed size: {len(compressed)} bytes)")
+        except Exception as e:
+            logger.warning(f"Failed to cache perfume data: {e}")
+
+        return result
 
     except Exception as e:
         logger.error(f"Error fetching weighted perfume/accord data: {e}", exc_info=True)
         return pd.DataFrame(), pd.DataFrame()
 
 
-# --- Core Recommendation Logic ---
 def generate_recommendations(user: AbstractUser, alpha: float = 0.7):
     """
-    Generates perfume recommendations for a given user based on their survey response,
-    using a weighted accord matrix reflecting predominance and popularity boosting.
-
-    Args:
-        user: The Django User object.
-        alpha: Weight factor for popularity boost.
-
-    Returns:
-        A list of tuples: [(perfume_id, final_score), ...] sorted by score,
-        or None if recommendations cannot be generated.
+    Generates perfume recommendations with optimized caching for Upstash.
     """
     logger.info(f"Starting recommendation generation for user {user.pk} (alpha={alpha}).")
 
-    # 1. Get perfume data and the full *weighted* accord matrix (Source of Truth for dimensions)
+    # Check if we have cached recommendations (optional - for frequently requesting users)
+    rec_cache_key = f'recommendations_{user.pk}_a{int(alpha*100)}_v1'
+    cached_recs = cache.get(rec_cache_key)
+    if cached_recs:
+        try:
+            logger.info(f"Returning cached recommendations for user {user.pk}")
+            return _decompress_data(cached_recs)
+        except Exception as e:
+            logger.warning(f"Cache decompression failed for recommendations: {e}")
+
     perfumes_df, accord_matrix_df = _get_perfume_accord_data()
     if perfumes_df.empty or accord_matrix_df.empty:
-        logger.warning("Perfume data or the weighted accord matrix is empty. Cannot generate recommendations.")
+        logger.warning("Perfume data or accord matrix is empty.")
         return None
 
-    # 2. Get the full list of all accords FROM the matrix columns to ensure alignment
     all_accords = accord_matrix_df.columns.tolist()
 
-    # 3. Get user's survey vector (aligned with all accords) and gender preference
     user_survey_vector, user_gender = _get_user_survey_vector_and_gender(user, all_accords)
     if user_survey_vector is None or user_gender is None:
-        # Error logged in helper, or user has no survey/gender pref
         logger.warning(f"Could not retrieve survey vector or gender for user {user.pk}.")
         return None
 
-    # 4. Filter Perfumes by Gender
-    logger.info(f"Filtering perfumes by user gender preference: '{user_gender}'")
+    logger.info(f"Filtering perfumes by gender: '{user_gender}'")
     if user_gender == 'male':
-        # Include 'male' and 'unisex'
         candidate_perfumes_df = perfumes_df[perfumes_df['gender'].isin(['male', 'unisex'])].copy()
     elif user_gender == 'female':
-        # Include 'female' and 'unisex'
         candidate_perfumes_df = perfumes_df[perfumes_df['gender'].isin(['female', 'unisex'])].copy()
     elif user_gender == 'unisex':
-        # Include ONLY 'unisex'
         candidate_perfumes_df = perfumes_df[perfumes_df['gender'] == 'unisex'].copy()
     else:
-        logger.warning(f"Unknown gender preference '{user_gender}' for user {user.pk}. Filtering skipped, using all perfumes.")
-        candidate_perfumes_df = perfumes_df.copy() # Or maybe return None?
+        logger.warning(f"Unknown gender '{user_gender}' for user {user.pk}.")
+        candidate_perfumes_df = perfumes_df.copy()
 
-    # Ensure candidate perfumes exist in the accord matrix
     candidate_perfumes_df = candidate_perfumes_df[candidate_perfumes_df.index.isin(accord_matrix_df.index)]
 
     if candidate_perfumes_df.empty:
-        logger.warning(f"No candidate perfumes found matching gender '{user_gender}' for user {user.pk}.")
-        return [] # Return empty list if no perfumes match criteria
+        logger.warning(f"No candidate perfumes for gender '{user_gender}'.")
+        return []
 
-    logger.info(f"Found {len(candidate_perfumes_df)} candidate perfumes after gender filtering.")
+    logger.info(f"Found {len(candidate_perfumes_df)} candidate perfumes.")
 
-    # Get the accord vectors for only the candidate perfumes
     candidate_accord_vectors = accord_matrix_df.loc[candidate_perfumes_df.index]
 
-    # 5. Calculate Similarity Scores (Dot product)
     logger.info("Calculating similarity scores...")
-    # Ensure user_survey_vector is a column vector for dot product if needed, or handle shapes appropriately
-    # Assuming candidate_accord_vectors is (n_perfumes, n_accords) and user_survey_vector is (n_accords,)
-    # Result should be (n_perfumes,)
     try:
-        # Use .values to ensure numpy array operation
         similarity_scores = candidate_accord_vectors.values.dot(user_survey_vector)
         candidate_perfumes_df['similarity_score'] = similarity_scores
     except ValueError as e:
          logger.error(f"Shape mismatch during similarity calculation: {e}", exc_info=True)
-         logger.error(f"Accord Matrix shape: {candidate_accord_vectors.shape}, User Vector shape: {user_survey_vector.shape}")
          return None
 
-
-    # 6. Apply Popularity Boosting
     logger.info("Applying popularity boosting...")
-    # Popularity is already in candidate_perfumes_df from _get_perfume_accord_data
     candidate_perfumes_df['rating_count'] = pd.to_numeric(candidate_perfumes_df['rating_count'], errors='coerce').fillna(0)
     candidate_perfumes_df['recent_magnitude'] = pd.to_numeric(candidate_perfumes_df['recent_magnitude'], errors='coerce').fillna(0)
     candidate_perfumes_df['overall_rating'] = pd.to_numeric(candidate_perfumes_df['overall_rating'], errors='coerce').fillna(0)
+
     rating_count_boost = np.log1p(np.maximum(0, candidate_perfumes_df['rating_count'].values))
     recent_magnitude_boost = np.log1p(np.maximum(0, candidate_perfumes_df['recent_magnitude'].values))
     overall_rating_boost = np.log1p(np.maximum(0, candidate_perfumes_df['overall_rating'].values))
     perfumes_boost = rating_count_boost + recent_magnitude_boost + overall_rating_boost
-    # Convert Decimal to float before multiplying with numpy array, then convert back for consistency
+
     alpha_float = float(alpha)
     candidate_perfumes_df['boosted_score'] = candidate_perfumes_df['similarity_score'] + (alpha_float * perfumes_boost)
 
-    # 7. Normalize Boosted Score to 0-1 range
     logger.info("Normalizing scores...")
     min_score = candidate_perfumes_df['boosted_score'].min()
     max_score = candidate_perfumes_df['boosted_score'].max()
 
     if max_score > min_score:
-        # Apply Min-Max scaling
         candidate_perfumes_df['final_score'] = (candidate_perfumes_df['boosted_score'] - min_score) / (max_score - min_score)
     elif max_score == min_score and max_score is not None:
-         # Handle case where all scores are the same (avoid division by zero)
-         # Assign 1.0 if the single score is positive, 0.5 if zero, 0.0 if negative? Or just 0.5?
-         candidate_perfumes_df['final_score'] = 0.5 # Assign neutral 0.5 if all scores are identical
-    else: # Handle case where scores might be NaN or calculation failed
-        logger.warning("Could not normalize scores (min=max or NaN). Assigning 0.")
+         candidate_perfumes_df['final_score'] = 0.5
+    else:
+        logger.warning("Could not normalize scores. Assigning 0.")
         candidate_perfumes_df['final_score'] = 0.0
 
-    # Ensure final_score is Decimal for database
     candidate_perfumes_df['final_score'] = candidate_perfumes_df['final_score'].apply(lambda x: Decimal(str(x)))
 
-
-    # 8. Prepare and Return Results
-    # Sort by final_score (descending)
     results_df = candidate_perfumes_df.sort_values(by='final_score', ascending=False)
-
-    # Create list of tuples (perfume_id, final_score)
     recommendations = list(zip(results_df.index, results_df['final_score']))
 
-    logger.info(f"Successfully generated {len(recommendations)} recommendations for user {user.pk}.")
+    logger.info(f"Generated {len(recommendations)} recommendations for user {user.pk}.")
 
-    # Optional: Log top 5 for debugging
-    # logger.debug("Top 5 recommendations:")
-    # top_5 = pd.merge(results_df.head(5), perfumes_df[['name']], left_index=True, right_index=True)
-    # logger.debug(top_5[['name', 'final_score']].to_string())
+    # Cache recommendations for 1 hour (balance between freshness and performance)
+    try:
+        cache.set(rec_cache_key, _compress_data(recommendations), timeout=60*60)
+    except Exception as e:
+        logger.warning(f"Failed to cache recommendations: {e}")
 
     return recommendations
-
-# Example Usage (for testing within Django shell, not part of the final task)
-# if __name__ == '__main__':
-#     # This block would only run if the script is executed directly,
-#     # which won't happen in the Celery task context.
-#     # You'd typically test this by calling generate_recommendations from the Django shell
-#     # after setting up a user and their survey response.
-#     try:
-#         test_user = User.objects.get(pk=1) # Replace with a valid user ID
-#         recs = generate_recommendations(test_user)
-#         if recs:
-#             print(f"Generated {len(recs)} recommendations.")
-#             # print(recs[:10]) # Print top 10
-#         else:
-#             print("Failed to generate recommendations.")
-#     except User.DoesNotExist:
-#         print("Test user not found.")
-#     except Exception as e:
-#         print(f"An error occurred during testing: {e}")
