@@ -32,3 +32,4 @@ numpy
 scipy
 celery
 redis
+whitenoise==6.6.0
