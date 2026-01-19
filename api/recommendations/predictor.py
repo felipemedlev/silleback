@@ -7,6 +7,7 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AbstractUser
 from ..models import Perfume, SurveyResponse, SurveyQuestion, Accord, UserPerfumeMatch
+from django.core.cache import cache
 
 # Setup logger
 logger = logging.getLogger(__name__)
@@ -98,6 +99,13 @@ def _get_perfume_accord_data(all_accords: list):
     Uses the full list of `all_accords` for the matrix columns.
     """
     try:
+        # Check cache
+        cache_key = 'perfume_accord_matrix_data'
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            logger.info("Using cached perfume-accord matrix.")
+            return cached_data
+
         # Fetch all perfumes with necessary fields.
         # Prefetch related accords. IMPORTANT: Assumes the default ordering
         # of the related 'accords' reflects their predominance. If an explicit
@@ -155,6 +163,10 @@ def _get_perfume_accord_data(all_accords: list):
                     # else: accord exists for perfume but not in the global 'all_accords' list (shouldn't happen with current logic)
 
         logger.info(f"Created perfume DataFrame ({len(perfumes_df)} perfumes) and weighted accord matrix ({accord_matrix_df.shape}).")
+
+        # Cache the result for 24 hours
+        cache.set(cache_key, (perfumes_df, accord_matrix_df), timeout=60*60*24)
+
         return perfumes_df, accord_matrix_df
 
     except Exception as e:

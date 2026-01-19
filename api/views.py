@@ -176,9 +176,11 @@ class SurveyResponseSubmitView(generics.GenericAPIView):
 
             logger.info(f"Triggering recommendation update task for user {request.user.pk}")
 
-            with transaction.atomic():
-                deleted_count, _ = UserPerfumeMatch.objects.filter(user=request.user).delete()
-                logger.info(f"Deleted {deleted_count} existing perfume matches for user {request.user.pk} before recalculation.")
+            # Race condition fix: Do NOT synchronously delete existing matches.
+            # Let the background task update/replace them to ensure the user always sees *something* while calculating.
+            # with transaction.atomic():
+            #     deleted_count, _ = UserPerfumeMatch.objects.filter(user=request.user).delete()
+            #     logger.info(f"Deleted {deleted_count} existing perfume matches for user {request.user.pk} before recalculation.")
 
             update_user_recommendations.delay(user_pk=request.user.pk)
 

@@ -233,3 +233,22 @@ CELERY_TASK_TIME_LIMIT = 500 # seconds
 # Custom setting for recommendation alpha value
 CELERY_RECOMMENDATION_ALPHA = float(os.environ.get('CELERY_RECOMMENDATION_ALPHA', 1.5))
 # --- End Celery Configuration ---
+
+# --- Cache Configuration ---
+# Use Redis for caching (e.g., for recommendation matrices)
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0'),
+        'OPTIONS': {
+             # If using rediss:// (SSL), the verify_certs option might be needed depending on the client.
+             # Django's RedisCache uses redis-py. For Upstash, simple connection string often suffices,
+             # but explicit SSL options can be passed if needed.
+             # 'CONNECTION_POOL_KWARGS': {'ssl_cert_reqs': ssl.CERT_NONE} if 'rediss' in CELERY_BROKER_URL else {}
+        }
+    }
+}
+# Add SSL options dynamically if needed
+if 'rediss' in CACHES['default']['LOCATION']:
+    CACHES['default']['OPTIONS']['CONNECTION_POOL_KWARGS'] = {'ssl_cert_reqs': ssl.CERT_NONE}
+
