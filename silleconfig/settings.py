@@ -107,12 +107,6 @@ DATABASES = {
     )
 }
 
-# Ensure schema is set for Neon
-if 'OPTIONS' not in DATABASES['default']:
-    DATABASES['default']['OPTIONS'] = {}
-DATABASES['default']['OPTIONS']['options'] = '-c search_path=public'
-
-
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
 
