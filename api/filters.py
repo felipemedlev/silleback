@@ -32,8 +32,13 @@ class PerfumeFilter(django_filters.FilterSet):
         try:
             occasion_names = [name.strip() for name in value.split(',') if name.strip()]
             if occasion_names:
-                # Find Occasion objects matching the names
-                occasions = Occasion.objects.filter(name__in=occasion_names)
+                # Find Occasion objects matching the names (case-insensitive)
+                from django.db.models import Q
+                q_objects = Q()
+                for occ_name in occasion_names:
+                    q_objects |= Q(name__iexact=occ_name)
+
+                occasions = Occasion.objects.filter(q_objects)
                 occasion_ids = [o.id for o in occasions]
                 # Optional: Add logging or warning if len(occasion_ids) != len(occasion_names)
                 if len(occasion_ids) != len(occasion_names):
@@ -91,8 +96,13 @@ class UserPerfumeMatchFilter(django_filters.FilterSet):
         try:
             occasion_names = [name.strip() for name in value.split(',') if name.strip()]
             if occasion_names:
-                # Find Occasion objects matching the names
-                occasions = Occasion.objects.filter(name__in=occasion_names)
+                # Find Occasion objects matching the names (case-insensitive)
+                from django.db.models import Q
+                q_objects = Q()
+                for occ_name in occasion_names:
+                    q_objects |= Q(name__iexact=occ_name)
+
+                occasions = Occasion.objects.filter(q_objects)
                 occasion_ids = [o.id for o in occasions]
                 # Optional: Add logging or warning if len(occasion_ids) != len(occasion_names)
                 if len(occasion_ids) != len(occasion_names):
