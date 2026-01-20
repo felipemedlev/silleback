@@ -325,3 +325,31 @@ def generate_recommendations(user: AbstractUser, alpha: float = 0.7):
         logger.warning(f"Failed to cache recommendations: {e}")
 
     return recommendations
+
+def invalidate_user_cache(user_pk):
+    """
+    Invalidates all caches related to a user's recommendations and survey data.
+    Should be called when a user submits a new survey.
+    """
+    try:
+        # Clear survey cache
+        survey_cache_key = f'user_survey_{user_pk}_v1'
+        cache.delete(survey_cache_key)
+
+        # Clear recommendation caches (for various alpha values)
+        # Scan broad patterns if possible, or just clear common ones
+        # Since we can't easily scan keys in standard Django cache API without specific backend support,
+        # we'll clear the most common ones or rely on the fact that generate_recommendations will
+        # re-compute if we pass force_refresh (if we implemented that)
+        # OR better: iterate logical alphas if needed, or accept that rec cache is short (1h)
+        # BUT survey cache is 30 days, so clearing survey cache is CRITICAL.
+
+        # We can also attempt to clear recommendation keys if we know the alphas used
+        # Typically alpha is 0.7, maybe others.
+        for alpha in [0.0, 0.5, 0.7, 1.0, 1.5]:
+            rec_cache_key = f'recommendations_{user_pk}_a{int(alpha*100)}_v1'
+            cache.delete(rec_cache_key)
+
+        logger.info(f"Invalidated recommendation and survey caches for user {user_pk}")
+    except Exception as e:
+        logger.error(f"Error invalidating cache for user {user_pk}: {e}")

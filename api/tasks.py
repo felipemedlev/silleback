@@ -5,8 +5,8 @@ from celery import shared_task
 from django.contrib.auth import get_user_model
 from django.db import transaction
 
-# Assuming predictor is in a sub-directory 'recommendations' within the 'api' app
-from .recommendations.predictor import generate_recommendations
+    # Assuming predictor is in a sub-directory 'recommendations' within the 'api' app
+from .recommendations.predictor import generate_recommendations, invalidate_user_cache
 from .models import Perfume, UserPerfumeMatch
 
 User = get_user_model()
@@ -20,6 +20,9 @@ def update_user_recommendations(self, user_pk: int):
     try:
         user = User.objects.get(pk=user_pk)
         logger.info(f"Starting recommendation update task for user {user_pk} ({user.email})")
+
+        # Invalidate cache to ensure we use fresh survey data
+        invalidate_user_cache(user_pk)
 
         # Generate recommendations -> list of (perfume_id, final_score)
         recommendations = generate_recommendations(user)
