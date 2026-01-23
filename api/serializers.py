@@ -75,6 +75,10 @@ class PerfumeSerializer(serializers.ModelSerializer):
         )
 
     def get_match_percentage(self, obj):
+        # Optimization: use annotated value if available
+        if hasattr(obj, 'match_percentage'):
+             return obj.match_percentage
+
         user = self.context['request'].user
         if user.is_authenticated:
             try:

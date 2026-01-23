@@ -44,12 +44,15 @@ class AccordViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.AllowAny]
 
 class PerfumeViewSet(viewsets.ReadOnlyModelViewSet):
+    # Base queryset defined in get_queryset now, but we can set a fallback or move logic there completely.
+    # We'll set a basic one here but override it in get_queryset
     queryset = Perfume.objects.select_related('brand').prefetch_related('occasions', 'accords').all()
     serializer_class = PerfumeSerializer
     permission_classes = [permissions.AllowAny]
-    filter_backends = [drf_filters.SearchFilter, DjangoFilterBackend]
+    filter_backends = [drf_filters.SearchFilter, DjangoFilterBackend, drf_filters.OrderingFilter]
     filterset_class = PerfumeFilter
     search_fields = ['name', 'description', 'brand__name']
+    ordering_fields = ['price_per_ml', 'overall_rating', 'longevity_rating', 'sillage_rating', 'price_value_rating', 'match_percentage', 'name']
 
     @action(detail=False, methods=['get'], url_path='by_external_ids')
     def by_external_ids(self, request):
@@ -64,6 +67,28 @@ class PerfumeViewSet(viewsets.ReadOnlyModelViewSet):
         queryset = self.get_queryset().filter(external_id__in=external_ids_list)
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
+
+    def get_queryset(self):
+        queryset = Perfume.objects.select_related('brand').prefetch_related('occasions', 'accords')
+
+        user = self.request.user
+        if user.is_authenticated:
+            # Subquery to get match_percentage for this user and perfume
+            from django.db.models import Subquery, OuterRef
+            match_qs = UserPerfumeMatch.objects.filter(
+                user=user,
+                perfume=OuterRef('pk')
+            ).values('match_percentage')[:1]
+
+            queryset = queryset.annotate(match_percentage=Subquery(match_qs))
+        else:
+             # Annotate with null for anonymous users so sorting doesn't crash
+            from django.db.models import Value, DecimalField
+            queryset = queryset.annotate(
+                match_percentage=Value(None, output_field=DecimalField(max_digits=4, decimal_places=3))
+            )
+
+        return queryset
 
 # --- Survey Questions API View ---
 from rest_framework import generics
