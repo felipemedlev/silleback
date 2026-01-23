@@ -74,18 +74,25 @@ class PerfumeViewSet(viewsets.ReadOnlyModelViewSet):
         user = self.request.user
         if user.is_authenticated:
             # Subquery to get match_percentage for this user and perfume
-            from django.db.models import Subquery, OuterRef
+            from django.db.models import Subquery, OuterRef, Value, DecimalField
+            from django.db.models.functions import Coalesce
+
             match_qs = UserPerfumeMatch.objects.filter(
                 user=user,
                 perfume=OuterRef('pk')
             ).values('match_percentage')[:1]
 
-            queryset = queryset.annotate(match_percentage=Subquery(match_qs))
+            queryset = queryset.annotate(
+                match_percentage=Coalesce(
+                    Subquery(match_qs),
+                    Value(0, output_field=DecimalField(max_digits=4, decimal_places=3))
+                )
+            )
         else:
-             # Annotate with null for anonymous users so sorting doesn't crash
+             # Annotate with 0 for anonymous users so sorting behaves like 0%
             from django.db.models import Value, DecimalField
             queryset = queryset.annotate(
-                match_percentage=Value(None, output_field=DecimalField(max_digits=4, decimal_places=3))
+                match_percentage=Value(0, output_field=DecimalField(max_digits=4, decimal_places=3))
             )
 
         return queryset
