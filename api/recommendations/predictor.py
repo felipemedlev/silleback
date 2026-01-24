@@ -294,7 +294,7 @@ def generate_recommendations(user: AbstractUser, alpha: float = 0.7):
     rating_count_boost = np.log1p(np.maximum(0, candidate_perfumes_df['rating_count'].values))
     recent_magnitude_boost = np.log1p(np.maximum(0, candidate_perfumes_df['recent_magnitude'].values))
     overall_rating_boost = np.log1p(np.maximum(0, candidate_perfumes_df['overall_rating'].values))
-    perfumes_boost = rating_count_boost + recent_magnitude_boost + overall_rating_boost
+    perfumes_boost = (rating_count_boost + recent_magnitude_boost + overall_rating_boost) * 0.75
 
     alpha_float = float(alpha)
     candidate_perfumes_df['boosted_score'] = candidate_perfumes_df['similarity_score'] + (alpha_float * perfumes_boost)
