@@ -53,6 +53,7 @@ class PerfumeViewSet(viewsets.ReadOnlyModelViewSet):
     filterset_class = PerfumeFilter
     search_fields = ['name', 'description', 'brand__name']
     ordering_fields = ['price_per_ml', 'overall_rating', 'longevity_rating', 'sillage_rating', 'price_value_rating', 'match_percentage', 'name']
+    ordering = ['-match_percentage', '-overall_rating', 'name']
 
     @action(detail=False, methods=['get'], url_path='by_external_ids')
     def by_external_ids(self, request):
